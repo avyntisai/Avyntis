@@ -59,6 +59,42 @@ html, body, [class*="css"] { background: #0d1117 !important; color: #e6edf3 !imp
 .val-ok  { background:#0d2010; border:1px solid #1a3a25; color:#3fb950; border-radius:8px; padding:0.7rem 1rem; font-size:0.82rem; margin-top:1rem; }
 .val-err { background:#2d1010; border:1px solid #4a1515; color:#f85149; border-radius:8px; padding:0.7rem 1rem; font-size:0.82rem; margin-top:1rem; }
 
+/* File Uploader Styling */
+[data-testid="stFileUploadDropzone"] {
+    background: #161b22 !important;
+    border: 2px dashed #30363d !important;
+    border-radius: 12px !important;
+    padding: 2rem 1.5rem !important;
+    transition: all 0.2s ease !important;
+}
+
+[data-testid="stFileUploadDropzone"]:hover {
+    border-color: #58a6ff !important;
+    background: #1a1f28 !important;
+}
+
+[data-testid="stFileUploadDropzone"] button {
+    background: #58a6ff !important;
+    color: #0d1117 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 0.7rem 1.4rem !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+    cursor: pointer !important;
+    transition: background 0.2s ease !important;
+}
+
+[data-testid="stFileUploadDropzone"] button:hover {
+    background: #79c0ff !important;
+}
+
+[data-testid="stFileUploadDropzone"] span {
+    color: #8b949e !important;
+    font-size: 0.85rem !important;
+}
+
+/* Dropdown and Select Styling */
 div[data-baseweb="select"]>div { background:#161b22 !important; border:1px solid #30363d !important; border-radius:8px !important; color:#e6edf3 !important; }
 div[data-baseweb="select"] span { color:#e6edf3 !important; }
 div[data-baseweb="popover"] { background:#161b22 !important; border:1px solid #30363d !important; }
@@ -203,13 +239,76 @@ if 'df_raw' not in st.session_state:
         <div class="upload-sub">Consumable Demand Forecasting & Procurement Intelligence</div>
     </div>""", unsafe_allow_html=True)
 
-    _, center, _ = st.columns([1, 1.4, 1])
+    st.markdown("""
+    <style>
+    .upload-file-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        margin: 3rem auto;
+        max-width: 600px;
+    }
+    
+    .file-uploader-wrapper {
+        width: 100%;
+        max-width: 500px;
+    }
+    
+    [data-testid="stFileUploadDropzone"] {
+        background: #161b22 !important;
+        border: 2px dashed #30363d !important;
+        border-radius: 12px !important;
+        padding: 2rem 1.5rem !important;
+        text-align: center !important;
+    }
+    
+    [data-testid="stFileUploadDropzone"]:hover {
+        border-color: #58a6ff !important;
+        background: #1a1f28 !important;
+    }
+    
+    [data-testid="stFileUploadDropzone"] button {
+        background: #58a6ff !important;
+        color: #0d1117 !important;
+        border: none !important;
+        border-radius: 6px !important;
+        padding: 0.6rem 1.2rem !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+    }
+    
+    [data-testid="stFileUploadDropzone"] button:hover {
+        background: #79c0ff !important;
+    }
+    
+    .upload-hint {
+        text-align: center;
+        color: #7d8590;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    _, center, _ = st.columns([1, 1.2, 1])
     with center:
-        uploaded = st.file_uploader("", type=["xlsx", "csv"], label_visibility="collapsed")
+        st.markdown('<div class="file-uploader-wrapper">', unsafe_allow_html=True)
+        uploaded = st.file_uploader("Upload your consumables data", type=["xlsx", "csv"], label_visibility="visible")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         st.markdown("""
-        <p style="text-align:center;color:#7d8590;font-size:0.8rem;margin-top:0.5rem">
-        Supports <strong style="color:#58a6ff">.xlsx</strong> and <strong style="color:#58a6ff">.csv</strong>
-        </p>
+        <div class="upload-hint">
+            Supports <strong style="color:#58a6ff">.xlsx</strong> and <strong style="color:#58a6ff">.csv</strong> 
+            formats • Max 200MB per file
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="margin-top: 1.5rem; text-align: center;">
+            <p style="color:#8b949e;font-size:0.8rem;margin-bottom:0.75rem;font-weight:600;">Required Columns:</p>
+        </div>
         <div class="col-list">
             <span class="col-pill">MRO Company</span><span class="col-pill">Fleet</span>
             <span class="col-pill">Consumable</span><span class="col-pill">Substance</span>
@@ -263,24 +362,82 @@ with n2:
 mro_opts   = sorted(df_raw['MROCompany'].dropna().unique().astype(str))
 fleet_opts = sorted(df_raw['Fleet'].dropna().unique().astype(str))
 
-f1, f2, f3, f4 = st.columns([2, 2, 1.2, 1.2])
+f1, f2, f3 = st.columns([2.5, 2.5, 1.5])
 with f1: 
-    sel_mro   = st.multiselect("MRO Company", mro_opts, default=mro_opts, key="sel_mro")
+    sel_mro   = st.multiselect("MRO Company", mro_opts, default=mro_opts[0:1] if mro_opts else [], key="sel_mro")
 with f2: 
     sel_fleet = st.multiselect("Fleet", fleet_opts, default=fleet_opts, key="sel_fleet")
-with f3: 
-    sel_type  = st.selectbox("Item Type", ["All", "Liquid", "Hard"], key="sel_type")
-with f4: 
-    sel_alert = st.selectbox("Alert Status", ["All", "Critical", "Warning", "Normal"], key="sel_alert")
+with f3:
+    view_mode = st.selectbox("View", ["Details", "Summary by MRO"], key="view_mode")
 
 # Apply filters
 df_f = df_raw[df_raw['MROCompany'].isin(sel_mro) & df_raw['Fleet'].isin(sel_fleet)]
-if sel_type != 'All':
-    df_f = df_f[df_f['ItemType'] == sel_type]
-
 df = calculate_demand(df_f)
 
-df_view = df if sel_alert == 'All' else df[df['Alert_Status'] == sel_alert]
+df_view = df
+
+# ── MRO Summary View Mode ──────────────────
+if view_mode == "Summary by MRO":
+    # Create MRO summary view
+    st.markdown('<div style="margin-top: 1rem;"></div>', unsafe_allow_html=True)
+    
+    # Aggregate consumables by MRO and Consumable
+    mro_summary = df.groupby(['MROCompany', 'Consumable', 'Unit']).agg({
+        'Total_Demand': 'sum',
+        'CurrentStock': 'sum',
+        'Reorder_Qty': 'sum'
+    }).reset_index().round(2)
+    
+    mro_summary['Coverage_Pct'] = np.where(
+        mro_summary['Total_Demand'] > 0,
+        (mro_summary['CurrentStock'] / mro_summary['Total_Demand'] * 100).round(1),
+        100.0
+    )
+    mro_summary['Stock_Status'] = np.where(
+        mro_summary['CurrentStock'] >= mro_summary['Total_Demand'],
+        'In Stock',
+        'Short'
+    )
+    
+    # Display for each MRO
+    for mro in sel_mro:
+        mro_data = mro_summary[mro_summary['MROCompany'] == mro].sort_values('Total_Demand', ascending=False)
+        
+        if len(mro_data) > 0:
+            st.markdown(f'<div class="sec-title" style="margin-top: 1.5rem; color: #58a6ff; font-size: 1.1rem;">{mro}</div>', unsafe_allow_html=True)
+            
+            # Show fleet breakdown if available
+            fleet_data = df[df['MROCompany'] == mro].groupby(['Fleet', 'Consumable']).agg({
+                'Total_Demand': 'sum'
+            }).reset_index().sort_values(['Fleet', 'Total_Demand'], ascending=[True, False])
+            
+            if len(fleet_data) > 0:
+                st.markdown(f'<div class="sec-sub" style="color: #8b949e; margin-top: 0.75rem;">📊 Fleet-wise Breakdown:</div>', unsafe_allow_html=True)
+                fleet_display = fleet_data.pivot_table(
+                    index='Consumable',
+                    columns='Fleet',
+                    values='Total_Demand',
+                    fill_value=0
+                ).reset_index()
+                
+                # Format for display
+                fleet_display_fmt = fleet_display.copy()
+                for col in fleet_display_fmt.columns[1:]:
+                    fleet_display_fmt[col] = fleet_display_fmt[col].apply(lambda x: f"{x:.2f}")
+                
+                st.dataframe(fleet_display_fmt, use_container_width=True, hide_index=True, key=f"fleet_{mro}")
+            
+            # Summary table
+            st.markdown(f'<div class="sec-sub" style="color: #8b949e; margin-top: 1rem;">📦 Total Required by Consumable:</div>', unsafe_allow_html=True)
+            summary_display = mro_data[['Consumable', 'Unit', 'Total_Demand', 'CurrentStock', 'Coverage_Pct', 'Stock_Status']].copy()
+            summary_display.columns = ['Consumable', 'Unit', 'Total Demand', 'Current Stock', 'Coverage %', 'Status']
+            summary_display['Coverage %'] = summary_display['Coverage %'].apply(lambda x: f"{x:.1f}%")
+            summary_display['Total Demand'] = summary_display['Total Demand'].apply(lambda x: f"{x:.2f}")
+            summary_display['Current Stock'] = summary_display['Current Stock'].apply(lambda x: f"{x:.2f}")
+            
+            st.dataframe(summary_display, use_container_width=True, hide_index=True, key=f"summary_{mro}")
+    
+    st.stop()
 
 # ── Alert strip ───────────────────────────
 crit = int((df['Alert_Status'] == 'Critical').sum())
