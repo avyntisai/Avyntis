@@ -388,17 +388,29 @@ with f1:
     sel_mro = st.multiselect("MRO Company", mro_opts, default=mro_opts)
 with f2:
     sel_fleet = st.multiselect("Fleet", fleet_opts, default=fleet_opts)
+consumable_opts = sorted(df_raw['Consumable'].dropna().unique())
+
+f1, f2, f3 = st.columns([2, 2, 2])
+with f1:
+    sel_mro = st.multiselect("MRO Company", mro_opts, default=mro_opts)
+with f2:
+    sel_fleet = st.multiselect("Fleet", fleet_opts, default=fleet_opts)
 with f3:
-    sel_type = st.selectbox("Item Type", ["All", "Liquid", "Hard"])
-with f4:
-    sel_alert = st.selectbox("Alert Status", ["All", "Critical", "Warning", "Normal"])
+    sel_consumable = st.multiselect(
+        "Consumables",
+        consumable_opts,
+        default=consumable_opts
+    )
 
 df_f = df_raw[df_raw["MROCompany"].isin(sel_mro) & df_raw["Fleet"].isin(sel_fleet)]
-if sel_type != "All":
-    df_f = df_f[df_f["ItemType"] == sel_type]
+df_f = df_raw[
+Fleet'].isin(sel_fleet) &    df_raw['MROCompany'].isin(sel_mro) &
+    df_raw['Consumable'].isin(sel_consumable)
+]
 
 df = calculate_demand(df_f)
-df_view = df if sel_alert == "All" else df[df["Alert_Status"] == sel_alert]
+df_view = df   # no alert status filtering anymore
+df[df["Alert_Status"] == sel_alert]
 
 # Alert strip
 crit = int((df["Alert_Status"] == "Critical").sum())
