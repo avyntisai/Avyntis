@@ -136,7 +136,6 @@ REQUIRED_COLS = [
 ]
 
 TEXT_COLS = {"MROCompany", "Fleet", "Consumable", "ItemType", "Unit"}
-ALERT_COLORS = {"Critical": "#f85149", "Warning": "#d29922", "Normal": "#3fb950"}
 
 # ============================================================
 # Helpers
@@ -146,11 +145,8 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = df.columns.astype(str).str.strip()
     df.rename(columns=COL_MAPPING, inplace=True)
 
-    # Clean ItemType normalization
     if "ItemType" in df.columns:
-        df["ItemType"] = (
-            df["ItemType"].astype(str).str.strip().str.title()
-        )
+        df["ItemType"] = df["ItemType"].astype(str).str.strip().str.title()
         df.loc[~df["ItemType"].isin(["Liquid", "Hard"]), "ItemType"] = "Hard"
 
     if "ForecastPeriod" not in df.columns:
@@ -160,45 +156,30 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_numeric_series(s: pd.Series) -> pd.Series:
-    # Handles commas and percent strings
     s = s.astype(str).str.replace(",", "", regex=False).str.replace("%", "", regex=False)
-    out = pd.to_numeric(s, errors="coerce").fillna(0)
-    return out
+    return pd.to_numeric(s, errors="coerce").fillna(0)
 
 
 def normalize_safety_buffer(buf: pd.Series) -> pd.Series:
-    """
-    Accepts either 0.2 OR 20 meaning 20%.
-    Also accepts strings like "20%" due to parse_numeric_series.
-    """
     b = parse_numeric_series(buf)
-    # if values look like 5, 10, 20 => treat as percent
-    b = np.where(b > 1, b / 100.0, b)
-    # clamp to [0, 2] just to prevent extreme user errors
+    b = np.where(b > 1, b / 100.0, b)  # accept 20 or 0.2
     b = np.clip(b, 0, 2.0)
     return pd.Series(b, index=buf.index)
 
 
 def classify_alert_vectorized(total_demand: np.ndarray, current_stock: np.ndarray) -> np.ndarray:
-    # coverage pct
     coverage = np.where(total_demand > 0, (current_stock / total_demand) * 100.0, 100.0)
-    out = np.where(coverage < 20, "Critical", np.where(coverage < 50, "Warning", "Normal"))
-    return out
+    return np.where(coverage < 20, "Critical", np.where(coverage < 50, "Warning", "Normal"))
 
 
 @st.cache_data(show_spinner=False)
 def load_dataset(file_bytes: bytes, filename: str, sheet_name: str | None = None) -> tuple[pd.DataFrame, set]:
-    # Use BytesIO so caching is stable and reading is reliable
     buf = io.BytesIO(file_bytes)
 
     if filename.lower().endswith(".csv"):
         df = pd.read_csv(buf)
     else:
-        # Excel: allow sheet selection
-        if sheet_name:
-            df = pd.read_excel(buf, engine="openpyxl", sheet_name=sheet_name)
-        else:
-            df = pd.read_excel(buf, engine="openpyxl")
+        df = pd.read_excel(buf, engine="openpyxl", sheet_name=sheet_name) if sheet_name else pd.read_excel(buf, engine="openpyxl")
 
     df = normalize_columns(df)
     missing = set(REQUIRED_COLS) - set(df.columns)
@@ -209,7 +190,6 @@ def load_dataset(file_bytes: bytes, filename: str, sheet_name: str | None = None
 def calculate_demand(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # numeric coercion
     for c in REQUIRED_COLS:
         if c in TEXT_COLS:
             df[c] = df[c].astype(str).str.strip()
@@ -221,26 +201,15 @@ def calculate_demand(df: pd.DataFrame) -> pd.DataFrame:
     is_liquid = df["ItemType"].eq("Liquid").to_numpy()
     is_hard = df["ItemType"].eq("Hard").to_numpy()
 
-    usage_fh = df["UsageRatePerFH"].to_numpy()
-    total_fh = df["TotalFlightHours"].to_numpy()
-    usage_fc = df["UsageRatePerFC"].to_numpy()
-    total_fc = df["TotalFlightCycles"].to_numpy()
-
-    sched_qty = df["ScheduledQtyPerCheck"].to_numpy()
-    sched_n = df["NumberOfChecks"].to_numpy()
-    fail_ev = df["ExpectedFailureEvents"].to_numpy()
-    unsched_qty = df["UnscheduledQtyPerEvent"].to_numpy()
-    buf = df["SafetyBufferPct"].to_numpy()
-    stock = df["CurrentStock"].to_numpy()
-
-    fh_d = np.where(is_liquid, usage_fh * total_fh, 0.0)
-    fc_d = np.where(is_hard, usage_fc * total_fc, 0.0)
-    sched_d = sched_qty * sched_n
-    unsched_d = fail_ev * unsched_qty
+    fh_d = np.where(is_liquid, df["UsageRatePerFH"].to_numpy() * df["TotalFlightHours"].to_numpy(), 0.0)
+    fc_d = np.where(is_hard, df["UsageRatePerFC"].to_numpy() * df["TotalFlightCycles"].to_numpy(), 0.0)
+    sched_d = df["ScheduledQtyPerCheck"].to_numpy() * df["NumberOfChecks"].to_numpy()
+    unsched_d = df["ExpectedFailureEvents"].to_numpy() * df["UnscheduledQtyPerEvent"].to_numpy()
 
     base = fh_d + fc_d + sched_d + unsched_d
-    total = np.round(base * (1.0 + buf), 2)
+    total = np.round(base * (1.0 + df["SafetyBufferPct"].to_numpy()), 2)
 
+    stock = df["CurrentStock"].to_numpy()
     coverage = np.where(total > 0, np.round((stock / total) * 100.0, 1), 100.0)
     reorder = np.where(stock < total, np.round(total - stock, 2), 0.0)
     status = np.where(stock >= total, "In Stock", "Short")
@@ -274,39 +243,40 @@ def fmt_table(df_in: pd.DataFrame, col_map: dict) -> pd.DataFrame:
     return out
 
 
-def validation_messages(df: pd.DataFrame) -> list[str]:
-    # vectorized validation
+def validation_messages(df: pd.DataFrame) -> list:
+    msgs = []
+
     exp_total = np.round(df["Base_Demand"].to_numpy() * (1.0 + df["SafetyBufferPct"].to_numpy()), 2)
     actual_total = df["Total_Demand"].to_numpy()
-
     mismatch = np.abs(actual_total - exp_total) > 0.05
-    msgs = []
+
     if mismatch.any():
         bad = df.loc[mismatch, ["Consumable", "Fleet"]].head(8)
         for _, r in bad.iterrows():
             msgs.append(f"{r['Consumable']} ({r['Fleet']}): buffer mismatch")
 
-    # validate alert classification
     total = df["Total_Demand"].to_numpy()
     stock = df["CurrentStock"].to_numpy()
     cov = np.where(total > 0, stock / total, 1.0)
     bad_crit = (df["Alert_Status"].eq("Critical").to_numpy()) & (total > 0) & (cov >= 0.2)
+
     if bad_crit.any():
         bad = df.loc[bad_crit, ["Consumable", "Fleet"]].head(8)
         for _, r in bad.iterrows():
             msgs.append(f"{r['Consumable']} ({r['Fleet']}): alert misclassified")
+
     return msgs
 
 
 # ============================================================
-# Upload Screen + Dataset Load
+# Upload Screen
 # ============================================================
 if "df_raw" not in st.session_state:
     st.markdown(
-        """
+        f"""
         <div class="upload-screen">
-            <div class="upload-logo">✈️</div>
-            <div class="upload-title">Project Avyntis</div>
+            <div class="upload-logo">{APP_ICON}</div>
+            <div class="upload-title">{APP_TITLE}</div>
             <div class="upload-sub">Consumable Demand Forecasting & Procurement Intelligence</div>
         </div>
         """,
@@ -329,7 +299,6 @@ if "df_raw" not in st.session_state:
         file_bytes = uploaded.getvalue()
         filename = uploaded.name
 
-        # If Excel has multiple sheets, let user pick before load
         sheet_name = None
         if filename.lower().endswith(".xlsx"):
             xls = pd.ExcelFile(io.BytesIO(file_bytes), engine="openpyxl")
@@ -369,6 +338,7 @@ with n1:
         """,
         unsafe_allow_html=True
     )
+
 with n2:
     st.markdown(
         f'<div style="display:flex;justify-content:flex-end;padding-top:0.6rem"><span class="badge-file">📄 {fname}</span></div>',
@@ -379,16 +349,14 @@ with n2:
         st.session_state.pop("filename", None)
         st.rerun()
 
-# Filters
+# ============================================================
+# Filters (UPDATED)
+# - Consumables list instead of ItemType
+# - Removed Alert Status dropdown
+# ============================================================
 mro_opts = sorted(df_raw["MROCompany"].dropna().unique())
 fleet_opts = sorted(df_raw["Fleet"].dropna().unique())
-
-f1, f2, f3, f4 = st.columns([2, 2, 1.2, 1.2])
-with f1:
-    sel_mro = st.multiselect("MRO Company", mro_opts, default=mro_opts)
-with f2:
-    sel_fleet = st.multiselect("Fleet", fleet_opts, default=fleet_opts)
-consumable_opts = sorted(df_raw['Consumable'].dropna().unique())
+consumable_opts = sorted(df_raw["Consumable"].dropna().unique())
 
 f1, f2, f3 = st.columns([2, 2, 2])
 with f1:
@@ -396,25 +364,23 @@ with f1:
 with f2:
     sel_fleet = st.multiselect("Fleet", fleet_opts, default=fleet_opts)
 with f3:
-    sel_consumable = st.multiselect(
-        "Consumables",
-        consumable_opts,
-        default=consumable_opts
-    )
+    sel_consumables = st.multiselect("Consumables", consumable_opts, default=consumable_opts)
 
-df_f = df_raw[df_raw["MROCompany"].isin(sel_mro) & df_raw["Fleet"].isin(sel_fleet)]
 df_f = df_raw[
-Fleet'].isin(sel_fleet) &    df_raw['MROCompany'].isin(sel_mro) &
-    df_raw['Consumable'].isin(sel_consumable)
+    df_raw["MROCompany"].isin(sel_mro) &
+    df_raw["Fleet"].isin(sel_fleet) &
+    df_raw["Consumable"].isin(sel_consumables)
 ]
 
 df = calculate_demand(df_f)
-df_view = df   # no alert status filtering anymore
-df[df["Alert_Status"] == sel_alert]
+df_view = df  # no alert status filtering anymore
 
-# Alert strip
+# ============================================================
+# Alerts strip
+# ============================================================
 crit = int((df["Alert_Status"] == "Critical").sum())
 warn = int((df["Alert_Status"] == "Warning").sum())
+
 if crit > 0 or warn > 0:
     st.markdown(
         f"""
@@ -427,7 +393,9 @@ if crit > 0 or warn > 0:
         unsafe_allow_html=True
     )
 
+# ============================================================
 # KPI cards
+# ============================================================
 total_demand = float(df["Total_Demand"].sum())
 instock_n = int((df["Stock_Status"] == "In Stock").sum())
 short_n = int((df["Stock_Status"] == "Short").sum())
@@ -468,7 +436,7 @@ st.markdown(
 )
 
 # ============================================================
-# Charts
+# Charts - Row 1
 # ============================================================
 ch1, ch2 = st.columns([1.6, 1])
 
@@ -528,7 +496,9 @@ with ch2:
             unsafe_allow_html=True
         )
 
+# ============================================================
 # Row 2
+# ============================================================
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
 ch3, ch4 = st.columns(2)
 
@@ -585,7 +555,9 @@ with ch4:
 
     st.altair_chart(comp_chart, use_container_width=True)
 
+# ============================================================
 # Scatter
+# ============================================================
 st.markdown('<div class="sec-title">Stock Coverage Map — All Items</div>', unsafe_allow_html=True)
 st.markdown('<div class="sec-sub">Size = reorder quantity · Dashed line = perfect coverage (Stock = Demand)</div>', unsafe_allow_html=True)
 
@@ -613,10 +585,9 @@ scatter = alt.Chart(scatter_df).mark_circle(opacity=0.75, stroke="#0d1117", stro
         alt.Tooltip("Total_Demand:Q", format=".1f", title="Demand"),
         alt.Tooltip("CurrentStock:Q", format=".1f", title="Stock"),
         alt.Tooltip("Coverage_Pct:Q", format=".1f", title="Coverage %"),
-        alt.Tooltip("Alert_Status:N", title="Status"),
+        "Alert_Status:N",
     ],
 )
-
 st.altair_chart((diag_line + scatter).properties(height=380, background="#161b22"), use_container_width=True)
 
 # ============================================================
