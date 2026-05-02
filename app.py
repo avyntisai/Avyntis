@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import altair as alt
 
 st.set_page_config(
     page_title="Project Avyntis",
@@ -15,165 +14,88 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 * { font-family: 'Inter', sans-serif !important; box-sizing: border-box; }
 html, body, [class*="css"] { background: #0d1117 !important; color: #e6edf3 !important; }
 .main .block-container { padding: 1.5rem 2rem 3rem; max-width: 100%; }
-
-/* Hide streamlit chrome */
 #MainMenu, footer, header { visibility: hidden; }
 .stDeployButton { display: none; }
 
-/* === UPLOAD SCREEN === */
-.upload-screen {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    min-height: 80vh; text-align: center; padding: 2rem;
-}
-.upload-logo { font-size: 3rem; margin-bottom: 1rem; }
-.upload-title { font-size: 2.2rem; font-weight: 700; color: #e6edf3; margin-bottom: 0.4rem; }
-.upload-sub { font-size: 1rem; color: #7d8590; margin-bottom: 2.5rem; }
-.upload-zone {
-    border: 1.5px dashed #30363d; border-radius: 16px;
-    padding: 3rem 4rem; background: #161b22;
-    width: 100%; max-width: 540px;
-}
-.upload-zone-icon { font-size: 2rem; margin-bottom: 0.75rem; }
-.upload-zone p { color: #7d8590; font-size: 0.9rem; margin: 0; }
-.upload-zone strong { color: #58a6ff; }
-.col-list {
-    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
-    margin-top: 1.5rem; max-width: 540px;
-}
-.col-pill {
-    background: #161b22; border: 1px solid #30363d;
-    border-radius: 20px; padding: 3px 10px;
-    font-size: 0.72rem; color: #8b949e;
-}
+.upload-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:78vh; text-align:center; padding:2rem; }
+.upload-logo { font-size:3rem; margin-bottom:1rem; }
+.upload-title { font-size:2.2rem; font-weight:700; color:#e6edf3; margin-bottom:0.4rem; }
+.upload-sub { font-size:1rem; color:#7d8590; margin-bottom:2rem; }
+.col-list { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:1.25rem; max-width:560px; }
+.col-pill { background:#161b22; border:1px solid #30363d; border-radius:20px; padding:3px 10px; font-size:0.72rem; color:#8b949e; }
 
-/* === TOP NAV === */
-.topnav {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.75rem 0 1.25rem;
-    border-bottom: 1px solid #21262d;
-    margin-bottom: 1.5rem;
-}
-.topnav-brand { display: flex; align-items: center; gap: 10px; }
-.topnav-brand .icon { font-size: 1.4rem; }
-.topnav-brand .name { font-size: 1.15rem; font-weight: 700; color: #e6edf3; }
-.topnav-brand .tag { font-size: 0.75rem; color: #7d8590; margin-left: 4px; }
-.topnav-meta { font-size: 0.8rem; color: #8b949e; }
-.badge-file { background: #1f2937; border: 1px solid #374151; border-radius: 20px; padding: 3px 10px; color: #58a6ff; font-size: 0.75rem; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0.6rem 0 1.1rem; border-bottom:1px solid #21262d; margin-bottom:1.4rem; }
+.brand { display:flex; align-items:center; gap:10px; }
+.brand-name { font-size:1.1rem; font-weight:700; color:#e6edf3; }
+.brand-tag { font-size:0.75rem; color:#7d8590; }
+.badge-file { background:#1f2937; border:1px solid #374151; border-radius:20px; padding:3px 10px; color:#58a6ff; font-size:0.75rem; }
 
-/* === KPI CARDS === */
-.kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 1.5rem; }
-.kpi-card {
-    background: #161b22; border: 1px solid #21262d;
-    border-radius: 12px; padding: 1.1rem 1.25rem;
-    position: relative; overflow: hidden;
-}
-.kpi-card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0;
-    height: 3px; border-radius: 12px 12px 0 0;
-}
-.kpi-card.blue::before { background: #58a6ff; }
-.kpi-card.green::before { background: #3fb950; }
-.kpi-card.amber::before { background: #d29922; }
-.kpi-card.red::before { background: #f85149; }
-.kpi-card.purple::before { background: #bc8cff; }
-.kpi-label { font-size: 0.72rem; color: #7d8590; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.6rem; }
-.kpi-value { font-size: 1.9rem; font-weight: 700; color: #e6edf3; line-height: 1; margin-bottom: 0.35rem; }
-.kpi-value.green { color: #3fb950; }
-.kpi-value.red { color: #f85149; }
-.kpi-value.amber { color: #d29922; }
-.kpi-value.blue { color: #58a6ff; }
-.kpi-sub { font-size: 0.72rem; color: #7d8590; }
+.kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:1.4rem; }
+.kpi-card { background:#161b22; border:1px solid #21262d; border-radius:12px; padding:1.1rem 1.2rem; position:relative; overflow:hidden; }
+.kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:12px 12px 0 0; }
+.kpi-blue::before { background:#58a6ff; }
+.kpi-green::before { background:#3fb950; }
+.kpi-amber::before { background:#d29922; }
+.kpi-red::before { background:#f85149; }
+.kpi-purple::before { background:#bc8cff; }
+.kpi-label { font-size:0.68rem; color:#7d8590; font-weight:500; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.55rem; }
+.kpi-value { font-size:1.85rem; font-weight:700; line-height:1; margin-bottom:0.3rem; }
+.kpi-sub { font-size:0.7rem; color:#7d8590; }
+.v-blue  { color:#58a6ff; } .v-green { color:#3fb950; }
+.v-amber { color:#d29922; } .v-red   { color:#f85149; }
+.v-white { color:#e6edf3; }
 
-/* === SECTION HEADERS === */
-.section-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin: 1.75rem 0 0.75rem;
-}
-.section-title { font-size: 0.95rem; font-weight: 600; color: #e6edf3; }
-.section-sub { font-size: 0.8rem; color: #7d8590; }
+.alert-strip { display:flex; align-items:center; gap:12px; background:#1a1115; border:1px solid #6e2a2a; border-left:4px solid #f85149; border-radius:10px; padding:0.7rem 1rem; margin-bottom:1.2rem; font-size:0.84rem; }
+.alert-strip .dot { width:8px; height:8px; border-radius:50%; background:#f85149; flex-shrink:0; }
+.cnt-red { font-weight:700; color:#f85149; }
+.cnt-amb { font-weight:700; color:#d29922; }
 
-/* === ALERT STRIP === */
-.alert-strip {
-    display: flex; align-items: center; gap: 12px;
-    background: #1a1115; border: 1px solid #6e2a2a;
-    border-left: 4px solid #f85149;
-    border-radius: 10px; padding: 0.75rem 1rem;
-    margin-bottom: 1.25rem; font-size: 0.85rem;
-}
-.alert-strip .dot { width: 8px; height: 8px; border-radius: 50%; background: #f85149; flex-shrink: 0; }
-.alert-strip .text { color: #e6edf3; }
-.alert-strip .count { font-weight: 700; color: #f85149; }
-.alert-strip .warn-count { font-weight: 700; color: #d29922; }
+.sec-title { font-size:0.9rem; font-weight:600; color:#e6edf3; margin:1.5rem 0 0.6rem; }
+.sec-sub   { font-size:0.78rem; color:#7d8590; margin-bottom:0.5rem; margin-top:-0.4rem; }
+.divider   { border:none; border-top:1px solid #21262d; margin:1.5rem 0; }
+.val-ok  { background:#0d2010; border:1px solid #1a3a25; color:#3fb950; border-radius:8px; padding:0.7rem 1rem; font-size:0.82rem; margin-top:1rem; }
+.val-err { background:#2d1010; border:1px solid #4a1515; color:#f85149; border-radius:8px; padding:0.7rem 1rem; font-size:0.82rem; margin-top:1rem; }
 
-/* === FILTER BAR === */
-.filter-bar {
-    display: flex; gap: 12px; align-items: center;
-    background: #161b22; border: 1px solid #21262d;
-    border-radius: 10px; padding: 0.85rem 1.1rem;
-    margin-bottom: 1.25rem; flex-wrap: wrap;
-}
-.filter-label { font-size: 0.75rem; color: #7d8590; font-weight: 500; white-space: nowrap; }
-
-/* === TABLE OVERRIDES === */
-.stDataFrame { border-radius: 10px !important; border: 1px solid #21262d !important; overflow: hidden; }
-.stDataFrame [data-testid="stDataFrameResizable"] { background: #161b22 !important; }
-div[data-testid="stDataFrame"] > div { background: #161b22 !important; }
-
-/* === PLOTLY OVERRIDES === */
-.js-plotly-plot { border-radius: 12px; overflow: hidden; }
-
-/* === STREAMLIT WIDGETS === */
-div[data-baseweb="select"] > div { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 8px !important; color: #e6edf3 !important; }
-div[data-baseweb="select"] span { color: #e6edf3 !important; }
-div[data-baseweb="select"] svg { color: #7d8590 !important; }
-div[data-baseweb="popover"] { background: #161b22 !important; border: 1px solid #30363d !important; }
-.stMultiSelect [data-baseweb="tag"] { background: #1f3a5f !important; color: #58a6ff !important; border: none !important; }
-.stDownloadButton button {
-    background: #21262d !important; border: 1px solid #30363d !important;
-    color: #e6edf3 !important; border-radius: 8px !important;
-    font-size: 0.82rem !important; padding: 0.45rem 1rem !important;
-    transition: all .15s !important;
-}
-.stDownloadButton button:hover { background: #30363d !important; border-color: #58a6ff !important; }
-.stFileUploader {
-    background: #161b22 !important; border: 1.5px dashed #30363d !important;
-    border-radius: 12px !important;
-}
-label[data-testid="stWidgetLabel"] { color: #7d8590 !important; font-size: 0.78rem !important; font-weight: 500 !important; }
-
-/* === TABS === */
-.stTabs [data-baseweb="tab-list"] { background: transparent !important; border-bottom: 1px solid #21262d; gap: 0; }
-.stTabs [data-baseweb="tab"] { background: transparent !important; color: #7d8590 !important; border: none !important; border-bottom: 2px solid transparent !important; padding: 0.6rem 1.1rem !important; font-size: 0.85rem !important; }
-.stTabs [aria-selected="true"] { color: #e6edf3 !important; border-bottom-color: #58a6ff !important; }
-.stTabs [data-baseweb="tab-panel"] { padding-top: 1rem !important; }
-
-/* === STATUS CHIPS === */
-.chip { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-.chip-green  { background: #122117; color: #3fb950; border: 1px solid #1a3a25; }
-.chip-red    { background: #2d1010; color: #f85149; border: 1px solid #4a1515; }
-.chip-amber  { background: #2a1e0a; color: #d29922; border: 1px solid #3d2d0e; }
-
-/* === DIVIDER === */
-.divider { border: none; border-top: 1px solid #21262d; margin: 1.5rem 0; }
-
-/* === VALIDATION BOX === */
-.val-box { border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.83rem; margin-top: 1rem; }
-.val-ok   { background: #0d2010; border: 1px solid #1a3a25; color: #3fb950; }
-.val-err  { background: #2d1010; border: 1px solid #4a1515; color: #f85149; }
-
-/* streamlit spacing fixes */
-.element-container { margin-bottom: 0 !important; }
-div[data-testid="column"] { padding: 0 6px !important; }
+div[data-baseweb="select"]>div { background:#161b22 !important; border:1px solid #30363d !important; border-radius:8px !important; color:#e6edf3 !important; }
+div[data-baseweb="select"] span { color:#e6edf3 !important; }
+div[data-baseweb="popover"] { background:#161b22 !important; border:1px solid #30363d !important; }
+.stMultiSelect [data-baseweb="tag"] { background:#1f3a5f !important; color:#58a6ff !important; border:none !important; }
+.stDownloadButton button { background:#21262d !important; border:1px solid #30363d !important; color:#e6edf3 !important; border-radius:8px !important; font-size:0.82rem !important; }
+.stDownloadButton button:hover { background:#30363d !important; border-color:#58a6ff !important; }
+label[data-testid="stWidgetLabel"] { color:#7d8590 !important; font-size:0.78rem !important; font-weight:500 !important; }
+.stTabs [data-baseweb="tab-list"] { background:transparent !important; border-bottom:1px solid #21262d; gap:0; }
+.stTabs [data-baseweb="tab"] { background:transparent !important; color:#7d8590 !important; border:none !important; border-bottom:2px solid transparent !important; padding:0.55rem 1rem !important; font-size:0.84rem !important; }
+.stTabs [aria-selected="true"] { color:#e6edf3 !important; border-bottom-color:#58a6ff !important; }
+.stTabs [data-baseweb="tab-panel"] { padding-top:1rem !important; }
+.stDataFrame { border-radius:10px !important; border:1px solid #21262d !important; }
+.element-container { margin-bottom:0 !important; }
+div[data-testid="column"] { padding:0 6px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 📦 Column Mapping & Schema
-# ==========================================
+# ── Altair dark theme ──────────────────────────────────────────
+ALT_THEME = {
+    "config": {
+        "background": "#161b22",
+        "view": {"stroke": "transparent"},
+        "axis": {
+            "domainColor": "#30363d", "gridColor": "#21262d",
+            "tickColor": "#30363d", "labelColor": "#8b949e",
+            "titleColor": "#7d8590", "labelFontSize": 10, "titleFontSize": 10,
+        },
+        "legend": {"labelColor": "#8b949e", "titleColor": "#7d8590",
+                   "labelFontSize": 10, "titleFontSize": 10},
+        "title": {"color": "#e6edf3", "fontSize": 12},
+        "mark": {"font": "Inter, sans-serif"},
+    }
+}
+alt.themes.register("avyntis", lambda: ALT_THEME)
+alt.themes.enable("avyntis")
+
+# ── Column mapping ─────────────────────────────────────────────
 COL_MAPPING = {
     'Substance': 'ItemType',
     'Rate per Flight Hour': 'UsageRatePerFH',
@@ -190,7 +112,6 @@ COL_MAPPING = {
     'Current Stock': 'CurrentStock',
     'MRO Company': 'MROCompany',
 }
-
 REQUIRED_COLS = [
     'MROCompany', 'Fleet', 'Consumable', 'ItemType', 'Unit',
     'UsageRatePerFH', 'TotalFlightHours', 'UsageRatePerFC', 'TotalFlightCycles',
@@ -198,24 +119,10 @@ REQUIRED_COLS = [
     'UnscheduledQtyPerEvent', 'SafetyBufferPct', 'CurrentStock'
 ]
 
-PLOTLY_LAYOUT = dict(
-    paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(0,0,0,0)',
-    font=dict(family='Inter, sans-serif', color='#8b949e', size=11),
-    margin=dict(l=16, r=16, t=32, b=16),
-    xaxis=dict(gridcolor='#21262d', linecolor='#30363d', zerolinecolor='#21262d'),
-    yaxis=dict(gridcolor='#21262d', linecolor='#30363d', zerolinecolor='#21262d'),
-    legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='#30363d'),
-    colorway=['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#79c0ff'],
-)
-
-# ==========================================
-# 🧮 Forecasting Logic
-# ==========================================
+# ── Calculation ────────────────────────────────────────────────
 def classify_alert(total_demand, current_stock):
-    if total_demand <= 0:
-        return "Normal"
-    pct = (current_stock / total_demand) * 100
+    if total_demand <= 0: return "Normal"
+    pct = current_stock / total_demand * 100
     if pct < 20: return "Critical"
     if pct < 50: return "Warning"
     return "Normal"
@@ -227,28 +134,22 @@ def calculate_demand(df: pd.DataFrame) -> pd.DataFrame:
     for col in num_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    df['FH_Demand']        = np.where(df['ItemType'] == 'Liquid', df['UsageRatePerFH'] * df['TotalFlightHours'], 0)
-    df['FC_Demand']        = np.where(df['ItemType'] == 'Hard',   df['UsageRatePerFC'] * df['TotalFlightCycles'], 0)
-    df['Sched_Demand']     = df['ScheduledQtyPerCheck'] * df['NumberOfChecks']
-    df['Unsched_Demand']   = df['ExpectedFailureEvents'] * df['UnscheduledQtyPerEvent']
-    df['Base_Demand']      = df['FH_Demand'] + df['FC_Demand'] + df['Sched_Demand'] + df['Unsched_Demand']
-    df['Total_Demand']     = (df['Base_Demand'] * (1 + df['SafetyBufferPct'])).round(2)
-    df['Stock_Status']     = np.where(df['CurrentStock'] >= df['Total_Demand'], 'In Stock', 'Short')
-    df['Coverage_Pct']     = np.where(df['Total_Demand'] > 0,
-                                       (df['CurrentStock'] / df['Total_Demand'] * 100).round(1), 100.0)
-    df['Reorder_Qty']      = np.where(df['CurrentStock'] < df['Total_Demand'],
-                                       (df['Total_Demand'] - df['CurrentStock']).round(2), 0)
-    df['Alert_Status']     = df.apply(lambda r: classify_alert(r['Total_Demand'], r['CurrentStock']), axis=1)
+    df['FH_Demand']      = np.where(df['ItemType'] == 'Liquid', df['UsageRatePerFH'] * df['TotalFlightHours'], 0)
+    df['FC_Demand']      = np.where(df['ItemType'] == 'Hard',   df['UsageRatePerFC'] * df['TotalFlightCycles'], 0)
+    df['Sched_Demand']   = df['ScheduledQtyPerCheck'] * df['NumberOfChecks']
+    df['Unsched_Demand'] = df['ExpectedFailureEvents'] * df['UnscheduledQtyPerEvent']
+    df['Base_Demand']    = df['FH_Demand'] + df['FC_Demand'] + df['Sched_Demand'] + df['Unsched_Demand']
+    df['Total_Demand']   = (df['Base_Demand'] * (1 + df['SafetyBufferPct'])).round(2)
+    df['Stock_Status']   = np.where(df['CurrentStock'] >= df['Total_Demand'], 'In Stock', 'Short')
+    df['Coverage_Pct']   = np.where(df['Total_Demand'] > 0,
+                                     (df['CurrentStock'] / df['Total_Demand'] * 100).round(1), 100.0)
+    df['Reorder_Qty']    = np.where(df['CurrentStock'] < df['Total_Demand'],
+                                     (df['Total_Demand'] - df['CurrentStock']).round(2), 0)
+    df['Alert_Status']   = df.apply(lambda r: classify_alert(r['Total_Demand'], r['CurrentStock']), axis=1)
     return df
 
-# ==========================================
-# 📥 Load File Helper
-# ==========================================
 def load_file(f):
-    if f.name.endswith('.csv'):
-        df = pd.read_csv(f)
-    else:
-        df = pd.read_excel(f)
+    df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
     df.columns = df.columns.str.strip()
     df.rename(columns=COL_MAPPING, inplace=True)
     if 'ForecastPeriod' not in df.columns:
@@ -256,25 +157,30 @@ def load_file(f):
     missing = set(REQUIRED_COLS) - set(df.columns)
     return df, missing
 
-# ==========================================
-# 🚦 UPLOAD SCREEN (no file uploaded)
-# ==========================================
+def to_excel(df_exp):
+    buf = io.BytesIO()
+    df_exp.to_excel(buf, index=False)
+    return buf.getvalue()
+
+ALERT_COLORS = {'Critical': '#f85149', 'Warning': '#d29922', 'Normal': '#3fb950'}
+
+# ══════════════════════════════════════════
+# UPLOAD SCREEN
+# ══════════════════════════════════════════
 if 'df_raw' not in st.session_state:
     st.markdown("""
     <div class="upload-screen">
         <div class="upload-logo">✈️</div>
         <div class="upload-title">Project Avyntis</div>
         <div class="upload-sub">Consumable Demand Forecasting & Procurement Intelligence</div>
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
-    col_c, col_r = st.columns([1, 2, 1])[:2]  # center trick
     _, center, _ = st.columns([1, 1.4, 1])
     with center:
         uploaded = st.file_uploader("", type=["xlsx", "csv"], label_visibility="collapsed")
         st.markdown("""
-        <p style="text-align:center; color:#7d8590; font-size:0.8rem; margin-top:0.5rem;">
-        Supports <strong style="color:#58a6ff">.xlsx</strong> and <strong style="color:#58a6ff">.csv</strong> formats
+        <p style="text-align:center;color:#7d8590;font-size:0.8rem;margin-top:0.5rem">
+        Supports <strong style="color:#58a6ff">.xlsx</strong> and <strong style="color:#58a6ff">.csv</strong>
         </p>
         <div class="col-list">
             <span class="col-pill">MRO Company</span><span class="col-pill">Fleet</span>
@@ -283,10 +189,9 @@ if 'df_raw' not in st.session_state:
             <span class="col-pill">Total flight hours</span><span class="col-pill">Rate per flight cycle</span>
             <span class="col-pill">Total flight Cycle</span><span class="col-pill">Qty in Schedule Check</span>
             <span class="col-pill">Number of Checks</span><span class="col-pill">Expected Failure Events</span>
-            <span class="col-pill">Consumables Used per Event</span><span class="col-pill">Safety Buffer</span>
-            <span class="col-pill">Current Stock</span>
-        </div>
-        """, unsafe_allow_html=True)
+            <span class="col-pill">Consumables Used per Event</span>
+            <span class="col-pill">Safety Buffer</span><span class="col-pill">Current Stock</span>
+        </div>""", unsafe_allow_html=True)
 
     if uploaded:
         df_raw, missing = load_file(uploaded)
@@ -298,47 +203,38 @@ if 'df_raw' not in st.session_state:
             st.rerun()
     st.stop()
 
-# ==========================================
-# 📊 MAIN DASHBOARD
-# ==========================================
-df_raw  = st.session_state['df_raw']
-fname   = st.session_state.get('filename', 'dataset')
+# ══════════════════════════════════════════
+# DASHBOARD
+# ══════════════════════════════════════════
+df_raw = st.session_state['df_raw']
+fname  = st.session_state.get('filename', 'dataset')
 
-# ── Top Nav ──────────────────────────────
-n1, n2 = st.columns([3, 1])
+# ── Top bar ───────────────────────────────
+n1, n2 = st.columns([4, 1])
 with n1:
     st.markdown(f"""
-    <div class="topnav">
-        <div class="topnav-brand">
-            <span class="icon">✈️</span>
-            <span class="name">Project Avyntis</span>
-            <span class="tag">Demand Forecasting</span>
+    <div class="topbar">
+        <div class="brand">
+            <span style="font-size:1.3rem">✈️</span>
+            <span class="brand-name">Project Avyntis</span>
+            <span class="brand-tag">/ Demand Forecasting</span>
         </div>
     </div>""", unsafe_allow_html=True)
 with n2:
-    st.markdown(f"""
-    <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;padding-top:0.75rem">
-        <span class="badge-file">📄 {fname}</span>
-    </div>""", unsafe_allow_html=True)
-    if st.button("↩ Upload new file", use_container_width=False):
+    st.markdown(f'<div style="display:flex;justify-content:flex-end;padding-top:0.6rem"><span class="badge-file">📄 {fname}</span></div>', unsafe_allow_html=True)
+    if st.button("↩ New file", use_container_width=True):
         del st.session_state['df_raw']
         st.rerun()
 
-# ── Filters ──────────────────────────────
-mro_opts  = sorted(df_raw['MROCompany'].dropna().unique())
+# ── Filters ───────────────────────────────
+mro_opts   = sorted(df_raw['MROCompany'].dropna().unique())
 fleet_opts = sorted(df_raw['Fleet'].dropna().unique())
-item_opts  = ['All', 'Liquid', 'Hard']
-alert_opts = ['All', 'Critical', 'Warning', 'Normal']
 
 f1, f2, f3, f4 = st.columns([2, 2, 1.2, 1.2])
-with f1:
-    sel_mro    = st.multiselect("MRO Company", mro_opts,  default=mro_opts,  key="mro")
-with f2:
-    sel_fleet  = st.multiselect("Fleet", fleet_opts, default=fleet_opts, key="fleet")
-with f3:
-    sel_type   = st.selectbox("Item Type", item_opts,  index=0, key="itype")
-with f4:
-    sel_alert  = st.selectbox("Alert Status", alert_opts, index=0, key="astatus")
+with f1: sel_mro   = st.multiselect("MRO Company", mro_opts,  default=mro_opts)
+with f2: sel_fleet = st.multiselect("Fleet",        fleet_opts, default=fleet_opts)
+with f3: sel_type  = st.selectbox("Item Type",    ["All", "Liquid", "Hard"])
+with f4: sel_alert = st.selectbox("Alert Status", ["All", "Critical", "Warning", "Normal"])
 
 df_f = df_raw[df_raw['MROCompany'].isin(sel_mro) & df_raw['Fleet'].isin(sel_fleet)]
 if sel_type != 'All':
@@ -346,246 +242,291 @@ if sel_type != 'All':
 
 df = calculate_demand(df_f)
 
-if sel_alert != 'All':
-    df_view = df[df['Alert_Status'] == sel_alert]
-else:
-    df_view = df
+df_view = df if sel_alert == 'All' else df[df['Alert_Status'] == sel_alert]
 
-# ── Alert Strip ──────────────────────────
-crit  = int((df['Alert_Status'] == 'Critical').sum())
-warn  = int((df['Alert_Status'] == 'Warning').sum())
+# ── Alert strip ───────────────────────────
+crit = int((df['Alert_Status'] == 'Critical').sum())
+warn = int((df['Alert_Status'] == 'Warning').sum())
 if crit > 0 or warn > 0:
     st.markdown(f"""
     <div class="alert-strip">
         <div class="dot"></div>
-        <div class="text">
-            <span class="count">{crit} Critical</span> items below 20% stock coverage &nbsp;·&nbsp;
-            <span class="warn-count">{warn} Warning</span> items below 50% coverage — immediate procurement review required
-        </div>
+        <div><span class="cnt-red">{crit} Critical</span> items below 20% coverage &nbsp;·&nbsp;
+        <span class="cnt-amb">{warn} Warning</span> items below 50% — procurement review required</div>
     </div>""", unsafe_allow_html=True)
 
-# ── KPI Cards ────────────────────────────
+# ── KPI cards ─────────────────────────────
 total_demand  = df['Total_Demand'].sum()
-instock       = int((df['Stock_Status'] == 'In Stock').sum())
-short         = int((df['Stock_Status'] == 'Short').sum())
+instock_n     = int((df['Stock_Status'] == 'In Stock').sum())
+short_n       = int((df['Stock_Status'] == 'Short').sum())
 reorder_total = df['Reorder_Qty'].sum()
-total_items   = len(df)
+n_items       = len(df)
 
 st.markdown(f"""
 <div class="kpi-grid">
-    <div class="kpi-card blue">
+    <div class="kpi-card kpi-blue">
         <div class="kpi-label">Total Forecasted Demand</div>
-        <div class="kpi-value blue">{total_demand:,.1f}</div>
-        <div class="kpi-sub">across {total_items} items</div>
+        <div class="kpi-value v-blue">{total_demand:,.1f}</div>
+        <div class="kpi-sub">across {n_items} line items</div>
     </div>
-    <div class="kpi-card green">
+    <div class="kpi-card kpi-green">
         <div class="kpi-label">In Stock</div>
-        <div class="kpi-value green">{instock}</div>
+        <div class="kpi-value v-green">{instock_n}</div>
         <div class="kpi-sub">items fully covered</div>
     </div>
-    <div class="kpi-card amber">
+    <div class="kpi-card kpi-amber">
         <div class="kpi-label">Short / At Risk</div>
-        <div class="kpi-value amber">{short}</div>
+        <div class="kpi-value v-amber">{short_n}</div>
         <div class="kpi-sub">items need reorder</div>
     </div>
-    <div class="kpi-card red">
+    <div class="kpi-card kpi-red">
         <div class="kpi-label">Critical Alerts</div>
-        <div class="kpi-value red">{crit}</div>
+        <div class="kpi-value v-red">{crit}</div>
         <div class="kpi-sub">&lt;20% stock coverage</div>
     </div>
-    <div class="kpi-card purple">
+    <div class="kpi-card kpi-purple">
         <div class="kpi-label">Total Reorder Qty</div>
-        <div class="kpi-value">{reorder_total:,.1f}</div>
+        <div class="kpi-value v-white">{reorder_total:,.1f}</div>
         <div class="kpi-sub">units to procure</div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
-# ── Charts Row ───────────────────────────
-ch1, ch2, ch3 = st.columns([1.2, 1.2, 1])
+# ══════════════════════════════════════════
+# CHARTS — Row 1
+# ══════════════════════════════════════════
+ch1, ch2 = st.columns([1.6, 1])
 
+# Chart 1: Demand vs Stock horizontal bar (top 15 by demand)
 with ch1:
-    st.markdown('<div class="section-title">Demand vs Stock by Item</div>', unsafe_allow_html=True)
-    fig1 = go.Figure()
-    color_map = {'Critical': '#f85149', 'Warning': '#d29922', 'Normal': '#3fb950'}
-    df_sorted = df.sort_values('Total_Demand', ascending=True).tail(20)
-    fig1.add_trace(go.Bar(
-        y=df_sorted['Consumable'], x=df_sorted['Total_Demand'],
-        name='Demand', orientation='h',
-        marker_color=[color_map[s] for s in df_sorted['Alert_Status']],
-        opacity=0.85,
-    ))
-    fig1.add_trace(go.Bar(
-        y=df_sorted['Consumable'], x=df_sorted['CurrentStock'],
-        name='Current Stock', orientation='h',
-        marker_color='#30363d', opacity=0.9,
-    ))
-    fig1.update_layout(
-        **PLOTLY_LAYOUT,
-        barmode='overlay', height=340,
-        legend=dict(orientation='h', y=1.08, x=0, bgcolor='rgba(0,0,0,0)'),
-        xaxis_title=None, yaxis_title=None,
-        yaxis=dict(tickfont=dict(size=10), gridcolor='#21262d'),
-    )
-    st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
+    st.markdown('<div class="sec-title">Demand vs Current Stock — Top items</div>', unsafe_allow_html=True)
+    top_df = df.nlargest(15, 'Total_Demand')[['Consumable', 'Total_Demand', 'CurrentStock', 'Alert_Status']].copy()
+    top_melt = top_df.melt(id_vars=['Consumable', 'Alert_Status'],
+                            value_vars=['Total_Demand', 'CurrentStock'],
+                            var_name='Metric', value_name='Value')
+    top_melt['Metric'] = top_melt['Metric'].map({'Total_Demand': 'Demand', 'CurrentStock': 'Stock'})
 
+    bars = alt.Chart(top_melt).mark_bar(cornerRadiusTopRight=3, cornerRadiusBottomRight=3).encode(
+        y=alt.Y('Consumable:N', sort='-x', title=None,
+                axis=alt.Axis(labelLimit=140, labelColor='#8b949e')),
+        x=alt.X('Value:Q', title='Quantity', axis=alt.Axis(labelColor='#8b949e')),
+        color=alt.Color('Metric:N',
+            scale=alt.Scale(domain=['Demand', 'Stock'], range=['#58a6ff', '#3fb950']),
+            legend=alt.Legend(title=None, orient='top', direction='horizontal')),
+        opacity=alt.condition(alt.datum.Metric == 'Demand', alt.value(0.9), alt.value(0.6)),
+        tooltip=['Consumable:N', 'Metric:N', alt.Tooltip('Value:Q', format='.1f')]
+    ).properties(height=320, background='#161b22')
+
+    st.altair_chart(bars, use_container_width=True)
+
+# Chart 2: Alert donut — using metric cards instead (Altair pie is limited)
 with ch2:
-    st.markdown('<div class="section-title">Stock Coverage by Fleet</div>', unsafe_allow_html=True)
-    fleet_cov = df.groupby('Fleet').apply(
-        lambda g: (g['CurrentStock'].sum() / g['Total_Demand'].sum() * 100) if g['Total_Demand'].sum() > 0 else 100
-    ).reset_index(name='Coverage_Pct').round(1)
-    fleet_cov['color'] = fleet_cov['Coverage_Pct'].apply(
-        lambda v: '#f85149' if v < 20 else ('#d29922' if v < 50 else '#3fb950')
-    )
-    fig2 = go.Figure(go.Bar(
-        x=fleet_cov['Fleet'], y=fleet_cov['Coverage_Pct'],
-        marker_color=fleet_cov['color'],
-        text=fleet_cov['Coverage_Pct'].astype(str) + '%',
-        textposition='outside', textfont=dict(size=10, color='#8b949e'),
-    ))
-    fig2.add_hline(y=50, line_dash='dash', line_color='#d29922', opacity=0.5, annotation_text='Warning (50%)', annotation_font_size=9)
-    fig2.add_hline(y=20, line_dash='dash', line_color='#f85149', opacity=0.5, annotation_text='Critical (20%)', annotation_font_size=9)
-    fig2.update_layout(**PLOTLY_LAYOUT, height=340, yaxis_title='Coverage %', yaxis_range=[0, max(fleet_cov['Coverage_Pct'].max() * 1.2, 110)])
-    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+    st.markdown('<div class="sec-title">Alert Breakdown</div>', unsafe_allow_html=True)
+    alert_counts = df['Alert_Status'].value_counts()
+    total_for_pct = len(df)
+
+    for status, color, bg in [
+        ('Critical', '#f85149', '#2d1010'),
+        ('Warning',  '#d29922', '#2a1e0a'),
+        ('Normal',   '#3fb950', '#0d2010'),
+    ]:
+        count = int(alert_counts.get(status, 0))
+        pct   = round(count / total_for_pct * 100, 1) if total_for_pct else 0
+        bar_w = int(pct)
+        st.markdown(f"""
+        <div style="background:{bg};border:1px solid {color}22;border-radius:10px;
+                    padding:0.85rem 1rem;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span style="color:{color};font-weight:600;font-size:0.85rem">{status}</span>
+                <span style="color:#e6edf3;font-size:1.3rem;font-weight:700">{count}</span>
+            </div>
+            <div style="background:#21262d;border-radius:4px;height:5px;overflow:hidden">
+                <div style="background:{color};width:{bar_w}%;height:100%;border-radius:4px;transition:width .3s"></div>
+            </div>
+            <div style="color:#7d8590;font-size:0.72rem;margin-top:5px">{pct}% of all items</div>
+        </div>""", unsafe_allow_html=True)
+
+    # Item type split
+    st.markdown('<div style="margin-top:0.75rem"></div>', unsafe_allow_html=True)
+    type_counts = df['ItemType'].value_counts()
+    for itype, color in [('Liquid', '#58a6ff'), ('Hard', '#bc8cff')]:
+        count = int(type_counts.get(itype, 0))
+        pct   = round(count / total_for_pct * 100, 1) if total_for_pct else 0
+        st.markdown(f"""
+        <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;
+                    padding:0.6rem 1rem;margin-bottom:8px;display:flex;
+                    justify-content:space-between;align-items:center;">
+            <span style="color:#8b949e;font-size:0.8rem">{itype} items</span>
+            <span style="color:{color};font-weight:600;font-size:0.88rem">{count} &nbsp;<span style="color:#7d8590;font-weight:400;font-size:0.72rem">({pct}%)</span></span>
+        </div>""", unsafe_allow_html=True)
+
+# ── Row 2: Coverage bar + Composition ─────
+st.markdown('<hr class="divider">', unsafe_allow_html=True)
+ch3, ch4 = st.columns(2)
 
 with ch3:
-    st.markdown('<div class="section-title">Alert Breakdown</div>', unsafe_allow_html=True)
-    alert_counts = df['Alert_Status'].value_counts().reset_index()
-    alert_counts.columns = ['Status', 'Count']
-    color_seq = {'Critical': '#f85149', 'Warning': '#d29922', 'Normal': '#3fb950'}
-    fig3 = go.Figure(go.Pie(
-        labels=alert_counts['Status'],
-        values=alert_counts['Count'],
-        hole=0.65,
-        marker_colors=[color_seq.get(s, '#58a6ff') for s in alert_counts['Status']],
-        textinfo='label+percent',
-        textfont=dict(size=10, color='#8b949e'),
-        hovertemplate='%{label}: %{value} items<extra></extra>',
-    ))
-    fig3.update_layout(
-        **PLOTLY_LAYOUT, height=340,
-        showlegend=False,
-        annotations=[dict(text=f'<b>{total_items}</b><br>items', x=0.5, y=0.5,
-                          font=dict(size=14, color='#e6edf3'), showarrow=False)]
+    st.markdown('<div class="sec-title">Stock Coverage % by Fleet</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-sub">Red line = Critical (20%) · Amber line = Warning (50%)</div>', unsafe_allow_html=True)
+
+    fleet_cov = df.groupby('Fleet').apply(
+        lambda g: round(g['CurrentStock'].sum() / g['Total_Demand'].sum() * 100, 1)
+                  if g['Total_Demand'].sum() > 0 else 100.0
+    ).reset_index(name='Coverage')
+    fleet_cov['Color'] = fleet_cov['Coverage'].apply(
+        lambda v: '#f85149' if v < 20 else ('#d29922' if v < 50 else '#3fb950'))
+
+    base = alt.Chart(fleet_cov)
+    bars_cov = base.mark_bar(cornerRadiusTopRight=3, cornerRadiusTopLeft=3).encode(
+        x=alt.X('Fleet:N', title=None, axis=alt.Axis(labelAngle=-30, labelColor='#8b949e')),
+        y=alt.Y('Coverage:Q', title='Coverage %', scale=alt.Scale(domain=[0, max(fleet_cov['Coverage'].max() * 1.15, 110)])),
+        color=alt.Color('Color:N', scale=None, legend=None),
+        tooltip=[alt.Tooltip('Fleet:N'), alt.Tooltip('Coverage:Q', format='.1f', title='Coverage %')]
     )
-    st.plotly_chart(fig3, use_container_width=True, config={'displayModeBar': False})
+    rule_warn = alt.Chart(pd.DataFrame({'y': [50]})).mark_rule(
+        color='#d29922', strokeDash=[4, 3], opacity=0.7).encode(y='y:Q')
+    rule_crit = alt.Chart(pd.DataFrame({'y': [20]})).mark_rule(
+        color='#f85149', strokeDash=[4, 3], opacity=0.7).encode(y='y:Q')
 
-# ── Demand Composition Chart ─────────────
-st.markdown('<div class="section-title" style="margin-top:1.5rem">Demand Composition by MRO Company</div>', unsafe_allow_html=True)
+    st.altair_chart((bars_cov + rule_warn + rule_crit).properties(height=280, background='#161b22'),
+                    use_container_width=True)
 
-mro_comp = df.groupby('MROCompany')[['FH_Demand','FC_Demand','Sched_Demand','Unsched_Demand']].sum().reset_index()
-fig4 = go.Figure()
-comp_colors = {'FH_Demand': '#58a6ff', 'FC_Demand': '#3fb950', 'Sched_Demand': '#d29922', 'Unsched_Demand': '#bc8cff'}
-comp_labels = {'FH_Demand': 'Flight Hour', 'FC_Demand': 'Flight Cycle', 'Sched_Demand': 'Scheduled', 'Unsched_Demand': 'Unscheduled'}
-for col, color in comp_colors.items():
-    fig4.add_trace(go.Bar(
-        name=comp_labels[col], x=mro_comp['MROCompany'], y=mro_comp[col].round(1),
-        marker_color=color, opacity=0.9,
-    ))
-fig4.update_layout(**PLOTLY_LAYOUT, barmode='stack', height=280,
-                   legend=dict(orientation='h', y=1.12, x=0))
-st.plotly_chart(fig4, use_container_width=True, config={'displayModeBar': False})
+with ch4:
+    st.markdown('<div class="sec-title">Demand Composition by MRO</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-sub">Breakdown of demand drivers per MRO company</div>', unsafe_allow_html=True)
 
-# ── Tabs: Data Tables ─────────────────────
+    mro_comp = df.groupby('MROCompany')[['FH_Demand', 'FC_Demand', 'Sched_Demand', 'Unsched_Demand']].sum().round(1).reset_index()
+    mro_melt = mro_comp.melt(id_vars='MROCompany', var_name='Driver', value_name='Qty')
+    driver_labels = {'FH_Demand': 'Flight Hour', 'FC_Demand': 'Flight Cycle',
+                     'Sched_Demand': 'Scheduled', 'Unsched_Demand': 'Unscheduled'}
+    mro_melt['Driver'] = mro_melt['Driver'].map(driver_labels)
+
+    comp_chart = alt.Chart(mro_melt).mark_bar(cornerRadiusTopRight=2, cornerRadiusTopLeft=2).encode(
+        x=alt.X('MROCompany:N', title=None, axis=alt.Axis(labelAngle=-30, labelColor='#8b949e')),
+        y=alt.Y('Qty:Q', title='Quantity', stack='zero'),
+        color=alt.Color('Driver:N',
+            scale=alt.Scale(domain=['Flight Hour', 'Flight Cycle', 'Scheduled', 'Unscheduled'],
+                            range=['#58a6ff', '#3fb950', '#d29922', '#bc8cff']),
+            legend=alt.Legend(title=None, orient='top', direction='horizontal', labelColor='#8b949e')),
+        tooltip=['MROCompany:N', 'Driver:N', alt.Tooltip('Qty:Q', format='.1f')]
+    ).properties(height=280, background='#161b22')
+
+    st.altair_chart(comp_chart, use_container_width=True)
+
+# ── Scatter: Stock vs Demand ───────────────
+st.markdown('<div class="sec-title">Stock Coverage Map — All Items</div>', unsafe_allow_html=True)
+st.markdown('<div class="sec-sub">Size = reorder quantity · Dashed line = perfect coverage (Stock = Demand)</div>', unsafe_allow_html=True)
+
+scatter_df = df[['Consumable', 'Fleet', 'MROCompany', 'Total_Demand', 'CurrentStock',
+                  'Coverage_Pct', 'Reorder_Qty', 'Alert_Status']].copy()
+scatter_df['BubbleSize'] = np.where(scatter_df['Reorder_Qty'] > 0,
+                                     scatter_df['Reorder_Qty'], scatter_df['Total_Demand'] * 0.05)
+
+max_val = max(scatter_df['Total_Demand'].max(), scatter_df['CurrentStock'].max()) * 1.1
+diag_df = pd.DataFrame({'x': [0, max_val], 'y': [0, max_val]})
+
+diag_line = alt.Chart(diag_df).mark_line(
+    strokeDash=[5, 4], color='#3fb950', opacity=0.4).encode(
+    x='x:Q', y='y:Q')
+
+scatter = alt.Chart(scatter_df).mark_circle(opacity=0.75, stroke='#0d1117', strokeWidth=0.5).encode(
+    x=alt.X('Total_Demand:Q', title='Total Demand',
+             scale=alt.Scale(domain=[0, max_val])),
+    y=alt.Y('CurrentStock:Q', title='Current Stock',
+             scale=alt.Scale(domain=[0, max_val])),
+    color=alt.Color('Alert_Status:N',
+        scale=alt.Scale(domain=['Critical', 'Warning', 'Normal'],
+                        range=['#f85149', '#d29922', '#3fb950']),
+        legend=alt.Legend(title='Status', orient='top-right')),
+    size=alt.Size('BubbleSize:Q', legend=None, scale=alt.Scale(range=[60, 600])),
+    tooltip=[
+        alt.Tooltip('Consumable:N'),
+        alt.Tooltip('Fleet:N'),
+        alt.Tooltip('MROCompany:N', title='MRO'),
+        alt.Tooltip('Total_Demand:Q', format='.1f', title='Demand'),
+        alt.Tooltip('CurrentStock:Q', format='.1f', title='Stock'),
+        alt.Tooltip('Coverage_Pct:Q', format='.1f', title='Coverage %'),
+        alt.Tooltip('Alert_Status:N', title='Status'),
+    ]
+)
+
+st.altair_chart((diag_line + scatter).properties(height=380, background='#161b22'),
+                use_container_width=True)
+
+# ══════════════════════════════════════════
+# DATA TABLES (tabs)
+# ══════════════════════════════════════════
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
+
 tab1, tab2, tab3 = st.tabs(["📋  Full Forecast Matrix", "🚨  Procurement Alerts", "🟢  In-Stock Items"])
 
-DISPLAY_COLS = {
+def fmt_table(df_in, col_map):
+    out = df_in[list(col_map.keys())].rename(columns=col_map).copy()
+    if 'Coverage %' in out.columns:
+        out['Coverage %'] = out['Coverage %'].apply(lambda v: f"{v:.1f}%")
+    return out
+
+FULL_COLS = {
     'MROCompany': 'MRO Company', 'Fleet': 'Fleet', 'Consumable': 'Consumable',
     'ItemType': 'Type', 'Unit': 'Unit',
     'FH_Demand': 'FH Demand', 'FC_Demand': 'FC Demand',
     'Sched_Demand': 'Scheduled', 'Unsched_Demand': 'Unscheduled',
     'Base_Demand': 'Base Demand', 'Total_Demand': 'Total Demand',
-    'CurrentStock': 'Current Stock', 'Coverage_Pct': 'Coverage %',
+    'CurrentStock': 'Stock', 'Coverage_Pct': 'Coverage %',
     'Reorder_Qty': 'Reorder Qty', 'Alert_Status': 'Status'
 }
-
-def style_table(df_in, cols):
-    sub = df_in[list(cols.keys())].rename(columns=cols).copy()
-    if 'Coverage %' in sub.columns:
-        sub['Coverage %'] = sub['Coverage %'].apply(lambda v: f"{v:.1f}%")
-    return sub
+ALERT_COLS = {
+    'MROCompany': 'MRO Company', 'Fleet': 'Fleet', 'Consumable': 'Consumable',
+    'ItemType': 'Type', 'Unit': 'Unit', 'CurrentStock': 'Stock',
+    'Total_Demand': 'Demand', 'Coverage_Pct': 'Coverage %',
+    'Reorder_Qty': 'Reorder Qty', 'Alert_Status': 'Status'
+}
+INSTOCK_COLS = {
+    'MROCompany': 'MRO Company', 'Fleet': 'Fleet', 'Consumable': 'Consumable',
+    'ItemType': 'Type', 'Unit': 'Unit',
+    'CurrentStock': 'Stock', 'Total_Demand': 'Demand',
+    'Coverage_Pct': 'Coverage %', 'Alert_Status': 'Status'
+}
 
 with tab1:
-    full_df = style_table(df_view, DISPLAY_COLS)
-    st.dataframe(full_df, use_container_width=True, hide_index=True, height=380)
+    st.dataframe(fmt_table(df_view, FULL_COLS), use_container_width=True, hide_index=True, height=380)
 
 with tab2:
-    alert_df = df_view[df_view['Alert_Status'].isin(['Critical', 'Warning'])]
+    alert_df = df_view[df_view['Alert_Status'].isin(['Critical', 'Warning'])].sort_values('Coverage_Pct')
     if alert_df.empty:
-        st.markdown('<p style="color:#3fb950;padding:1rem 0">✓ No procurement alerts for selected filters.</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#3fb950;padding:0.75rem 0">✓ No procurement alerts for current filters.</p>', unsafe_allow_html=True)
     else:
-        alert_show_cols = {
-            'MROCompany': 'MRO Company', 'Fleet': 'Fleet', 'Consumable': 'Consumable',
-            'ItemType': 'Type', 'Unit': 'Unit', 'CurrentStock': 'Stock',
-            'Total_Demand': 'Demand', 'Coverage_Pct': 'Coverage %',
-            'Reorder_Qty': 'Reorder Qty', 'Alert_Status': 'Status'
-        }
-        st.dataframe(style_table(alert_df.sort_values('Coverage_Pct'), alert_show_cols),
-                     use_container_width=True, hide_index=True, height=380)
+        st.dataframe(fmt_table(alert_df, ALERT_COLS), use_container_width=True, hide_index=True, height=380)
 
 with tab3:
     instock_df = df_view[df_view['Stock_Status'] == 'In Stock']
     if instock_df.empty:
-        st.markdown('<p style="color:#d29922;padding:1rem 0">⚠ No fully in-stock items for selected filters.</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#d29922;padding:0.75rem 0">⚠ No fully in-stock items for current filters.</p>', unsafe_allow_html=True)
     else:
-        ins_cols = {
-            'MROCompany': 'MRO Company', 'Fleet': 'Fleet', 'Consumable': 'Consumable',
-            'ItemType': 'Type', 'Unit': 'Unit', 'CurrentStock': 'Stock',
-            'Total_Demand': 'Demand', 'Coverage_Pct': 'Coverage %', 'Alert_Status': 'Status'
-        }
-        st.dataframe(style_table(instock_df, ins_cols),
-                     use_container_width=True, hide_index=True, height=380)
+        st.dataframe(fmt_table(instock_df, INSTOCK_COLS), use_container_width=True, hide_index=True, height=380)
 
-# ── Coverage Scatter ─────────────────────
-st.markdown('<div class="section-title" style="margin-top:1.75rem">Stock Coverage Map — All Items</div>', unsafe_allow_html=True)
-st.markdown('<p style="color:#7d8590;font-size:0.8rem;margin-bottom:0.5rem">Bubble size = reorder quantity. Hover for details.</p>', unsafe_allow_html=True)
-
-fig5 = px.scatter(
-    df, x='Total_Demand', y='CurrentStock',
-    color='Alert_Status',
-    color_discrete_map={'Critical': '#f85149', 'Warning': '#d29922', 'Normal': '#3fb950'},
-    size=np.where(df['Reorder_Qty'] > 0, df['Reorder_Qty'], df['Total_Demand'] * 0.05),
-    size_max=40,
-    hover_name='Consumable',
-    hover_data={'Fleet': True, 'MROCompany': True, 'Total_Demand': ':.1f',
-                'CurrentStock': ':.1f', 'Coverage_Pct': ':.1f', 'Alert_Status': False},
-    labels={'Total_Demand': 'Total Demand', 'CurrentStock': 'Current Stock', 'Alert_Status': 'Status'},
-)
-fig5.add_shape(type='line', x0=0, y0=0, x1=df['Total_Demand'].max()*1.1, y1=df['Total_Demand'].max()*1.1,
-               line=dict(color='#3fb950', dash='dash', width=1), opacity=0.5)
-fig5.add_annotation(x=df['Total_Demand'].max()*0.8, y=df['Total_Demand'].max()*0.85,
-                    text='Stock = Demand', font=dict(size=9, color='#3fb950'), showarrow=False)
-fig5.update_layout(**PLOTLY_LAYOUT, height=380,
-                   legend=dict(orientation='h', y=1.05, x=0))
-st.plotly_chart(fig5, use_container_width=True, config={'displayModeBar': False})
-
-# ── Export Row ───────────────────────────
+# ══════════════════════════════════════════
+# EXPORTS
+# ══════════════════════════════════════════
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">Export Reports</div>', unsafe_allow_html=True)
-e1, e2, e3, e4 = st.columns(4)
+st.markdown('<div class="sec-title">Export Reports</div>', unsafe_allow_html=True)
 
-def to_excel(df_exp):
-    buf = io.BytesIO()
-    df_exp.to_excel(buf, index=False)
-    return buf.getvalue()
+e1, e2, e3, e4 = st.columns(4)
+alert_exp  = df[df['Alert_Status'].isin(['Critical', 'Warning'])]
+reorder_exp = df[df['Reorder_Qty'] > 0][['MROCompany','Fleet','Consumable','Unit','Reorder_Qty','Alert_Status']]
+instock_exp = df[df['Stock_Status'] == 'In Stock']
 
 with e1:
     st.download_button("📥 Full Forecast", data=to_excel(df), file_name="avyntis_forecast.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                        use_container_width=True)
 with e2:
-    alert_exp = df[df['Alert_Status'].isin(['Critical', 'Warning'])]
     st.download_button("🚨 Alert Report", data=to_excel(alert_exp), file_name="avyntis_alerts.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                        use_container_width=True, disabled=alert_exp.empty)
 with e3:
-    reorder_exp = df[df['Reorder_Qty'] > 0][['MROCompany','Fleet','Consumable','Unit','Reorder_Qty','Alert_Status']]
     st.download_button("🛒 Reorder List", data=to_excel(reorder_exp), file_name="avyntis_reorder.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                        use_container_width=True, disabled=reorder_exp.empty)
 with e4:
-    instock_exp = df[df['Stock_Status'] == 'In Stock']
     st.download_button("✅ In-Stock List", data=to_excel(instock_exp), file_name="avyntis_instock.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                        use_container_width=True, disabled=instock_exp.empty)
@@ -597,10 +538,10 @@ for _, r in df.iterrows():
     if abs(r['Total_Demand'] - exp) > 0.05:
         errs.append(f"{r['Consumable']} ({r['Fleet']}): buffer mismatch")
     if r['Alert_Status'] == 'Critical' and r['Total_Demand'] > 0:
-        if (r['CurrentStock'] / r['Total_Demand']) >= 0.2:
+        if r['CurrentStock'] / r['Total_Demand'] >= 0.2:
             errs.append(f"{r['Consumable']} ({r['Fleet']}): alert misclassified")
 
 if errs:
-    st.markdown('<div class="val-box val-err">❌ Validation issues:<br>' + '<br>'.join(errs) + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class="val-err">❌ Validation issues:<br>' + '<br>'.join(errs) + '</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="val-box val-ok">✓ All calculations validated — no logic errors detected</div>', unsafe_allow_html=True)
+    st.markdown('<div class="val-ok">✓ All calculations validated — no logic errors detected</div>', unsafe_allow_html=True)
