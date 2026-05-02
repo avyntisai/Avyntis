@@ -121,48 +121,76 @@ REQUIRED_COLS = [
 
 # ── Calculation ────────────────────────────────────────────────
 def classify_alert(total_demand, current_stock):
-    if total_demand <= 0: return "Normal"
+    """Classify alert status based on coverage percentage."""
+    if total_demand <= 0: 
+        return "Normal"
     pct = current_stock / total_demand * 100
-    if pct < 20: return "Critical"
-    if pct < 50: return "Warning"
+    if pct < 20: 
+        return "Critical"
+    if pct < 50: 
+        return "Warning"
     return "Normal"
 
 def calculate_demand(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate all demand metrics and stock status."""
     df = df.copy()
     num_cols = [c for c in REQUIRED_COLS if c not in
                 ['MROCompany', 'Fleet', 'Consumable', 'ItemType', 'Unit']]
+    
     for col in num_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
+    # Calculate demand components
     df['FH_Demand']      = np.where(df['ItemType'] == 'Liquid', df['UsageRatePerFH'] * df['TotalFlightHours'], 0)
     df['FC_Demand']      = np.where(df['ItemType'] == 'Hard',   df['UsageRatePerFC'] * df['TotalFlightCycles'], 0)
     df['Sched_Demand']   = df['ScheduledQtyPerCheck'] * df['NumberOfChecks']
     df['Unsched_Demand'] = df['ExpectedFailureEvents'] * df['UnscheduledQtyPerEvent']
+    
+    # Base demand + safety buffer
     df['Base_Demand']    = df['FH_Demand'] + df['FC_Demand'] + df['Sched_Demand'] + df['Unsched_Demand']
+    df['SafetyBufferPct'] = df['SafetyBufferPct'].fillna(0)
     df['Total_Demand']   = (df['Base_Demand'] * (1 + df['SafetyBufferPct'])).round(2)
+    
+    # Stock status and coverage
     df['Stock_Status']   = np.where(df['CurrentStock'] >= df['Total_Demand'], 'In Stock', 'Short')
     df['Coverage_Pct']   = np.where(df['Total_Demand'] > 0,
                                      (df['CurrentStock'] / df['Total_Demand'] * 100).round(1), 100.0)
     df['Reorder_Qty']    = np.where(df['CurrentStock'] < df['Total_Demand'],
                                      (df['Total_Demand'] - df['CurrentStock']).round(2), 0)
     df['Alert_Status']   = df.apply(lambda r: classify_alert(r['Total_Demand'], r['CurrentStock']), axis=1)
+    
     return df
 
 def load_file(f):
-    df = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
-    df.columns = df.columns.str.strip()
-    df.rename(columns=COL_MAPPING, inplace=True)
-    if 'ForecastPeriod' not in df.columns:
-        df['ForecastPeriod'] = 'Monthly'
-    missing = set(REQUIRED_COLS) - set(df.columns)
-    return df, missing
+    """Load and validate uploaded file."""
+    try:
+        if f.name.endswith('.csv'):
+            df = pd.read_csv(f)
+        else:
+            df = pd.read_excel(f)
+        
+        # Clean column names
+        df.columns = df.columns.str.strip()
+        df.rename(columns=COL_MAPPING, inplace=True)
+        
+        # Add default forecast period if missing
+        if 'ForecastPeriod' not in df.columns:
+            df['ForecastPeriod'] = 'Monthly'
+        
+        # Check for required columns
+        missing = set(REQUIRED_COLS) - set(df.columns)
+        return df, missing
+    except Exception as e:
+        st.error(f"Error loading file: {str(e)}")
+        return None, None
 
 def to_excel(df_exp):
+    """Convert DataFrame to Excel bytes."""
     buf = io.BytesIO()
-    df_exp.to_excel(buf, index=False)
+    with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+        df_exp.to_excel(writer, index=False)
+    buf.seek(0)
     return buf.getvalue()
-
-ALERT_COLORS = {'Critical': '#f85149', 'Warning': '#d29922', 'Normal': '#3fb950'}
 
 # ══════════════════════════════════════════
 # UPLOAD SCREEN
@@ -195,8 +223,10 @@ if 'df_raw' not in st.session_state:
 
     if uploaded:
         df_raw, missing = load_file(uploaded)
-        if missing:
-            st.error(f"Missing columns: **{', '.join(sorted(missing))}**")
+        if df_raw is None:
+            st.stop()
+        elif missing:
+            st.error(f"❌ Missing required columns: **{', '.join(sorted(missing))}**")
         else:
             st.session_state['df_raw'] = df_raw
             st.session_state['filename'] = uploaded.name
@@ -212,7 +242,7 @@ fname  = st.session_state.get('filename', 'dataset')
 # ── Top bar ───────────────────────────────
 n1, n2 = st.columns([4, 1])
 with n1:
-    st.markdown(f"""
+    st.markdown("""
     <div class="topbar">
         <div class="brand">
             <span style="font-size:1.3rem">✈️</span>
@@ -221,21 +251,29 @@ with n1:
         </div>
     </div>""", unsafe_allow_html=True)
 with n2:
-    st.markdown(f'<div style="display:flex;justify-content:flex-end;padding-top:0.6rem"><span class="badge-file">📄 {fname}</span></div>', unsafe_allow_html=True)
-    if st.button("↩ New file", use_container_width=True):
-        del st.session_state['df_raw']
-        st.rerun()
+    col_badge, col_btn = st.columns([1, 1])
+    with col_badge:
+        st.markdown(f'<span class="badge-file">📄 {fname}</span>', unsafe_allow_html=True)
+    with col_btn:
+        if st.button("↩ New file", use_container_width=True):
+            del st.session_state['df_raw']
+            st.rerun()
 
 # ── Filters ───────────────────────────────
-mro_opts   = sorted(df_raw['MROCompany'].dropna().unique())
-fleet_opts = sorted(df_raw['Fleet'].dropna().unique())
+mro_opts   = sorted(df_raw['MROCompany'].dropna().unique().astype(str))
+fleet_opts = sorted(df_raw['Fleet'].dropna().unique().astype(str))
 
 f1, f2, f3, f4 = st.columns([2, 2, 1.2, 1.2])
-with f1: sel_mro   = st.multiselect("MRO Company", mro_opts,  default=mro_opts)
-with f2: sel_fleet = st.multiselect("Fleet",        fleet_opts, default=fleet_opts)
-with f3: sel_type  = st.selectbox("Item Type",    ["All", "Liquid", "Hard"])
-with f4: sel_alert = st.selectbox("Alert Status", ["All", "Critical", "Warning", "Normal"])
+with f1: 
+    sel_mro   = st.multiselect("MRO Company", mro_opts, default=mro_opts, key="sel_mro")
+with f2: 
+    sel_fleet = st.multiselect("Fleet", fleet_opts, default=fleet_opts, key="sel_fleet")
+with f3: 
+    sel_type  = st.selectbox("Item Type", ["All", "Liquid", "Hard"], key="sel_type")
+with f4: 
+    sel_alert = st.selectbox("Alert Status", ["All", "Critical", "Warning", "Normal"], key="sel_alert")
 
+# Apply filters
 df_f = df_raw[df_raw['MROCompany'].isin(sel_mro) & df_raw['Fleet'].isin(sel_fleet)]
 if sel_type != 'All':
     df_f = df_f[df_f['ItemType'] == sel_type]
@@ -299,26 +337,30 @@ ch1, ch2 = st.columns([1.6, 1])
 # Chart 1: Demand vs Stock horizontal bar (top 15 by demand)
 with ch1:
     st.markdown('<div class="sec-title">Demand vs Current Stock — Top items</div>', unsafe_allow_html=True)
-    top_df = df.nlargest(15, 'Total_Demand')[['Consumable', 'Total_Demand', 'CurrentStock', 'Alert_Status']].copy()
-    top_melt = top_df.melt(id_vars=['Consumable', 'Alert_Status'],
-                            value_vars=['Total_Demand', 'CurrentStock'],
-                            var_name='Metric', value_name='Value')
-    top_melt['Metric'] = top_melt['Metric'].map({'Total_Demand': 'Demand', 'CurrentStock': 'Stock'})
+    
+    if len(df) > 0:
+        top_df = df.nlargest(15, 'Total_Demand')[['Consumable', 'Total_Demand', 'CurrentStock', 'Alert_Status']].copy()
+        top_melt = top_df.melt(id_vars=['Consumable', 'Alert_Status'],
+                                value_vars=['Total_Demand', 'CurrentStock'],
+                                var_name='Metric', value_name='Value')
+        top_melt['Metric'] = top_melt['Metric'].map({'Total_Demand': 'Demand', 'CurrentStock': 'Stock'})
 
-    bars = alt.Chart(top_melt).mark_bar(cornerRadiusTopRight=3, cornerRadiusBottomRight=3).encode(
-        y=alt.Y('Consumable:N', sort='-x', title=None,
-                axis=alt.Axis(labelLimit=140, labelColor='#8b949e')),
-        x=alt.X('Value:Q', title='Quantity', axis=alt.Axis(labelColor='#8b949e')),
-        color=alt.Color('Metric:N',
-            scale=alt.Scale(domain=['Demand', 'Stock'], range=['#58a6ff', '#3fb950']),
-            legend=alt.Legend(title=None, orient='top', direction='horizontal')),
-        opacity=alt.condition(alt.datum.Metric == 'Demand', alt.value(0.9), alt.value(0.6)),
-        tooltip=['Consumable:N', 'Metric:N', alt.Tooltip('Value:Q', format='.1f')]
-    ).properties(height=320, background='#161b22')
+        bars = alt.Chart(top_melt).mark_bar(cornerRadiusTopRight=3, cornerRadiusBottomRight=3).encode(
+            y=alt.Y('Consumable:N', sort='-x', title=None,
+                    axis=alt.Axis(labelLimit=140, labelColor='#8b949e')),
+            x=alt.X('Value:Q', title='Quantity', axis=alt.Axis(labelColor='#8b949e')),
+            color=alt.Color('Metric:N',
+                scale=alt.Scale(domain=['Demand', 'Stock'], range=['#58a6ff', '#3fb950']),
+                legend=alt.Legend(title=None, orient='top', direction='horizontal')),
+            opacity=alt.condition(alt.datum.Metric == 'Demand', alt.value(0.9), alt.value(0.6)),
+            tooltip=['Consumable:N', 'Metric:N', alt.Tooltip('Value:Q', format='.1f')]
+        ).properties(height=320, background='#161b22')
 
-    st.altair_chart(bars, use_container_width=True)
+        st.altair_chart(bars, use_container_width=True)
+    else:
+        st.info("No data to display for selected filters")
 
-# Chart 2: Alert donut — using metric cards instead (Altair pie is limited)
+# Chart 2: Alert breakdown
 with ch2:
     st.markdown('<div class="sec-title">Alert Breakdown</div>', unsafe_allow_html=True)
     alert_counts = df['Alert_Status'].value_counts()
@@ -330,7 +372,7 @@ with ch2:
         ('Normal',   '#3fb950', '#0d2010'),
     ]:
         count = int(alert_counts.get(status, 0))
-        pct   = round(count / total_for_pct * 100, 1) if total_for_pct else 0
+        pct   = round(count / total_for_pct * 100, 1) if total_for_pct > 0 else 0
         bar_w = int(pct)
         st.markdown(f"""
         <div style="background:{bg};border:1px solid {color}22;border-radius:10px;
@@ -350,7 +392,7 @@ with ch2:
     type_counts = df['ItemType'].value_counts()
     for itype, color in [('Liquid', '#58a6ff'), ('Hard', '#bc8cff')]:
         count = int(type_counts.get(itype, 0))
-        pct   = round(count / total_for_pct * 100, 1) if total_for_pct else 0
+        pct   = round(count / total_for_pct * 100, 1) if total_for_pct > 0 else 0
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;
                     padding:0.6rem 1rem;margin-bottom:8px;display:flex;
@@ -367,89 +409,100 @@ with ch3:
     st.markdown('<div class="sec-title">Stock Coverage % by Fleet</div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-sub">Red line = Critical (20%) · Amber line = Warning (50%)</div>', unsafe_allow_html=True)
 
-    fleet_cov = df.groupby('Fleet').apply(
-        lambda g: round(g['CurrentStock'].sum() / g['Total_Demand'].sum() * 100, 1)
-                  if g['Total_Demand'].sum() > 0 else 100.0
-    ).reset_index(name='Coverage')
-    fleet_cov['Color'] = fleet_cov['Coverage'].apply(
-        lambda v: '#f85149' if v < 20 else ('#d29922' if v < 50 else '#3fb950'))
+    if len(df) > 0:
+        fleet_cov = df.groupby('Fleet').apply(
+            lambda g: round(g['CurrentStock'].sum() / g['Total_Demand'].sum() * 100, 1)
+                      if g['Total_Demand'].sum() > 0 else 100.0,
+            include_groups=False
+        ).reset_index(name='Coverage')
+        fleet_cov.columns = ['Fleet', 'Coverage']
+        fleet_cov['Color'] = fleet_cov['Coverage'].apply(
+            lambda v: '#f85149' if v < 20 else ('#d29922' if v < 50 else '#3fb950'))
 
-    base = alt.Chart(fleet_cov)
-    bars_cov = base.mark_bar(cornerRadiusTopRight=3, cornerRadiusTopLeft=3).encode(
-        x=alt.X('Fleet:N', title=None, axis=alt.Axis(labelAngle=-30, labelColor='#8b949e')),
-        y=alt.Y('Coverage:Q', title='Coverage %', scale=alt.Scale(domain=[0, max(fleet_cov['Coverage'].max() * 1.15, 110)])),
-        color=alt.Color('Color:N', scale=None, legend=None),
-        tooltip=[alt.Tooltip('Fleet:N'), alt.Tooltip('Coverage:Q', format='.1f', title='Coverage %')]
-    )
-    rule_warn = alt.Chart(pd.DataFrame({'y': [50]})).mark_rule(
-        color='#d29922', strokeDash=[4, 3], opacity=0.7).encode(y='y:Q')
-    rule_crit = alt.Chart(pd.DataFrame({'y': [20]})).mark_rule(
-        color='#f85149', strokeDash=[4, 3], opacity=0.7).encode(y='y:Q')
+        base = alt.Chart(fleet_cov)
+        bars_cov = base.mark_bar(cornerRadiusTopRight=3, cornerRadiusTopLeft=3).encode(
+            x=alt.X('Fleet:N', title=None, axis=alt.Axis(labelAngle=-30, labelColor='#8b949e')),
+            y=alt.Y('Coverage:Q', title='Coverage %', scale=alt.Scale(domain=[0, max(fleet_cov['Coverage'].max() * 1.15, 110)])),
+            color=alt.Color('Color:N', scale=None, legend=None),
+            tooltip=[alt.Tooltip('Fleet:N'), alt.Tooltip('Coverage:Q', format='.1f', title='Coverage %')]
+        )
+        rule_warn = alt.Chart(pd.DataFrame({'y': [50]})).mark_rule(
+            color='#d29922', strokeDash=[4, 3], opacity=0.7).encode(y='y:Q')
+        rule_crit = alt.Chart(pd.DataFrame({'y': [20]})).mark_rule(
+            color='#f85149', strokeDash=[4, 3], opacity=0.7).encode(y='y:Q')
 
-    st.altair_chart((bars_cov + rule_warn + rule_crit).properties(height=280, background='#161b22'),
-                    use_container_width=True)
+        st.altair_chart((bars_cov + rule_warn + rule_crit).properties(height=280, background='#161b22'),
+                        use_container_width=True)
+    else:
+        st.info("No data to display for selected filters")
 
 with ch4:
     st.markdown('<div class="sec-title">Demand Composition by MRO</div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-sub">Breakdown of demand drivers per MRO company</div>', unsafe_allow_html=True)
 
-    mro_comp = df.groupby('MROCompany')[['FH_Demand', 'FC_Demand', 'Sched_Demand', 'Unsched_Demand']].sum().round(1).reset_index()
-    mro_melt = mro_comp.melt(id_vars='MROCompany', var_name='Driver', value_name='Qty')
-    driver_labels = {'FH_Demand': 'Flight Hour', 'FC_Demand': 'Flight Cycle',
-                     'Sched_Demand': 'Scheduled', 'Unsched_Demand': 'Unscheduled'}
-    mro_melt['Driver'] = mro_melt['Driver'].map(driver_labels)
+    if len(df) > 0:
+        mro_comp = df.groupby('MROCompany')[['FH_Demand', 'FC_Demand', 'Sched_Demand', 'Unsched_Demand']].sum(numeric_only=True).round(1).reset_index()
+        mro_melt = mro_comp.melt(id_vars='MROCompany', var_name='Driver', value_name='Qty')
+        driver_labels = {'FH_Demand': 'Flight Hour', 'FC_Demand': 'Flight Cycle',
+                         'Sched_Demand': 'Scheduled', 'Unsched_Demand': 'Unscheduled'}
+        mro_melt['Driver'] = mro_melt['Driver'].map(driver_labels)
 
-    comp_chart = alt.Chart(mro_melt).mark_bar(cornerRadiusTopRight=2, cornerRadiusTopLeft=2).encode(
-        x=alt.X('MROCompany:N', title=None, axis=alt.Axis(labelAngle=-30, labelColor='#8b949e')),
-        y=alt.Y('Qty:Q', title='Quantity', stack='zero'),
-        color=alt.Color('Driver:N',
-            scale=alt.Scale(domain=['Flight Hour', 'Flight Cycle', 'Scheduled', 'Unscheduled'],
-                            range=['#58a6ff', '#3fb950', '#d29922', '#bc8cff']),
-            legend=alt.Legend(title=None, orient='top', direction='horizontal', labelColor='#8b949e')),
-        tooltip=['MROCompany:N', 'Driver:N', alt.Tooltip('Qty:Q', format='.1f')]
-    ).properties(height=280, background='#161b22')
+        comp_chart = alt.Chart(mro_melt).mark_bar(cornerRadiusTopRight=2, cornerRadiusTopLeft=2).encode(
+            x=alt.X('MROCompany:N', title=None, axis=alt.Axis(labelAngle=-30, labelColor='#8b949e')),
+            y=alt.Y('Qty:Q', title='Quantity', stack='zero'),
+            color=alt.Color('Driver:N',
+                scale=alt.Scale(domain=['Flight Hour', 'Flight Cycle', 'Scheduled', 'Unscheduled'],
+                                range=['#58a6ff', '#3fb950', '#d29922', '#bc8cff']),
+                legend=alt.Legend(title=None, orient='top', direction='horizontal', labelColor='#8b949e')),
+            tooltip=['MROCompany:N', 'Driver:N', alt.Tooltip('Qty:Q', format='.1f')]
+        ).properties(height=280, background='#161b22')
 
-    st.altair_chart(comp_chart, use_container_width=True)
+        st.altair_chart(comp_chart, use_container_width=True)
+    else:
+        st.info("No data to display for selected filters")
 
 # ── Scatter: Stock vs Demand ───────────────
 st.markdown('<div class="sec-title">Stock Coverage Map — All Items</div>', unsafe_allow_html=True)
 st.markdown('<div class="sec-sub">Size = reorder quantity · Dashed line = perfect coverage (Stock = Demand)</div>', unsafe_allow_html=True)
 
-scatter_df = df[['Consumable', 'Fleet', 'MROCompany', 'Total_Demand', 'CurrentStock',
-                  'Coverage_Pct', 'Reorder_Qty', 'Alert_Status']].copy()
-scatter_df['BubbleSize'] = np.where(scatter_df['Reorder_Qty'] > 0,
-                                     scatter_df['Reorder_Qty'], scatter_df['Total_Demand'] * 0.05)
+if len(df) > 0:
+    scatter_df = df[['Consumable', 'Fleet', 'MROCompany', 'Total_Demand', 'CurrentStock',
+                      'Coverage_Pct', 'Reorder_Qty', 'Alert_Status']].copy()
+    scatter_df['BubbleSize'] = np.where(scatter_df['Reorder_Qty'] > 0,
+                                         scatter_df['Reorder_Qty'], scatter_df['Total_Demand'] * 0.05)
 
-max_val = max(scatter_df['Total_Demand'].max(), scatter_df['CurrentStock'].max()) * 1.1
-diag_df = pd.DataFrame({'x': [0, max_val], 'y': [0, max_val]})
+    max_val = max(scatter_df['Total_Demand'].max(), scatter_df['CurrentStock'].max()) * 1.1
+    diag_df = pd.DataFrame({'x': [0, max_val], 'y': [0, max_val]})
 
-diag_line = alt.Chart(diag_df).mark_line(
-    strokeDash=[5, 4], color='#3fb950', opacity=0.4).encode(
-    x='x:Q', y='y:Q')
+    diag_line = alt.Chart(diag_df).mark_line(
+        strokeDash=[5, 4], color='#3fb950', opacity=0.4).encode(
+        x='x:Q', y='y:Q')
 
-scatter = alt.Chart(scatter_df).mark_circle(opacity=0.75, stroke='#0d1117', strokeWidth=0.5).encode(
-    x=alt.X('Total_Demand:Q', title='Total Demand',
-             scale=alt.Scale(domain=[0, max_val])),
-    y=alt.Y('CurrentStock:Q', title='Current Stock',
-             scale=alt.Scale(domain=[0, max_val])),
-    color=alt.Color('Alert_Status:N',
-        scale=alt.Scale(domain=['Critical', 'Warning', 'Normal'],
-                        range=['#f85149', '#d29922', '#3fb950']),
-        legend=alt.Legend(title='Status', orient='top-right')),
-    size=alt.Size('BubbleSize:Q', legend=None, scale=alt.Scale(range=[60, 600])),
-    tooltip=[
-        alt.Tooltip('Consumable:N'),
-        alt.Tooltip('Fleet:N'),
-        alt.Tooltip('MROCompany:N', title='MRO'),
-        alt.Tooltip('Total_Demand:Q', format='.1f', title='Demand'),
-        alt.Tooltip('CurrentStock:Q', format='.1f', title='Stock'),
-        alt.Tooltip('Coverage_Pct:Q', format='.1f', title='Coverage %'),
-        alt.Tooltip('Alert_Status:N', title='Status'),
-    ]
-)
+    scatter = alt.Chart(scatter_df).mark_circle(opacity=0.75, stroke='#0d1117', strokeWidth=0.5).encode(
+        x=alt.X('Total_Demand:Q', title='Total Demand',
+                 scale=alt.Scale(domain=[0, max_val])),
+        y=alt.Y('CurrentStock:Q', title='Current Stock',
+                 scale=alt.Scale(domain=[0, max_val])),
+        color=alt.Color('Alert_Status:N',
+            scale=alt.Scale(domain=['Critical', 'Warning', 'Normal'],
+                            range=['#f85149', '#d29922', '#3fb950']),
+            legend=alt.Legend(title='Status', orient='top-right')),
+        size=alt.Size('BubbleSize:Q', legend=None, scale=alt.Scale(range=[60, 600])),
+        tooltip=[
+            alt.Tooltip('Consumable:N'),
+            alt.Tooltip('Fleet:N'),
+            alt.Tooltip('MROCompany:N', title='MRO'),
+            alt.Tooltip('Total_Demand:Q', format='.1f', title='Demand'),
+            alt.Tooltip('CurrentStock:Q', format='.1f', title='Stock'),
+            alt.Tooltip('Coverage_Pct:Q', format='.1f', title='Coverage %'),
+            alt.Tooltip('Alert_Status:N', title='Status'),
+        ]
+    )
 
-st.altair_chart((diag_line + scatter).properties(height=380, background='#161b22'),
-                use_container_width=True)
+    st.altair_chart((diag_line + scatter).properties(height=380, background='#161b22'),
+                    use_container_width=True)
+else:
+    st.info("No data to display for selected filters")
 
 # ══════════════════════════════════════════
 # DATA TABLES (tabs)
@@ -459,7 +512,9 @@ st.markdown('<hr class="divider">', unsafe_allow_html=True)
 tab1, tab2, tab3 = st.tabs(["📋  Full Forecast Matrix", "🚨  Procurement Alerts", "🟢  In-Stock Items"])
 
 def fmt_table(df_in, col_map):
-    out = df_in[list(col_map.keys())].rename(columns=col_map).copy()
+    """Format table for display."""
+    out = df_in[[c for c in col_map.keys() if c in df_in.columns]].copy()
+    out = out.rename(columns={k: v for k, v in col_map.items() if k in out.columns})
     if 'Coverage %' in out.columns:
         out['Coverage %'] = out['Coverage %'].apply(lambda v: f"{v:.1f}%")
     return out
@@ -487,7 +542,10 @@ INSTOCK_COLS = {
 }
 
 with tab1:
-    st.dataframe(fmt_table(df_view, FULL_COLS), use_container_width=True, hide_index=True, height=380)
+    if len(df_view) > 0:
+        st.dataframe(fmt_table(df_view, FULL_COLS), use_container_width=True, hide_index=True, height=380)
+    else:
+        st.info("No data to display for selected filters")
 
 with tab2:
     alert_df = df_view[df_view['Alert_Status'].isin(['Critical', 'Warning'])].sort_values('Coverage_Pct')
@@ -534,14 +592,15 @@ with e4:
 # ── Validation ───────────────────────────
 errs = []
 for _, r in df.iterrows():
-    exp = round(r['Base_Demand'] * (1 + r['SafetyBufferPct']), 2)
-    if abs(r['Total_Demand'] - exp) > 0.05:
-        errs.append(f"{r['Consumable']} ({r['Fleet']}): buffer mismatch")
+    if r['Base_Demand'] > 0:
+        exp = round(r['Base_Demand'] * (1 + r['SafetyBufferPct']), 2)
+        if abs(r['Total_Demand'] - exp) > 0.05:
+            errs.append(f"{r['Consumable']} ({r['Fleet']}): buffer mismatch")
     if r['Alert_Status'] == 'Critical' and r['Total_Demand'] > 0:
         if r['CurrentStock'] / r['Total_Demand'] >= 0.2:
             errs.append(f"{r['Consumable']} ({r['Fleet']}): alert misclassified")
 
 if errs:
-    st.markdown('<div class="val-err">❌ Validation issues:<br>' + '<br>'.join(errs) + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class="val-err">❌ Validation issues:<br>' + '<br>'.join(errs[:10]) + '</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="val-ok">✓ All calculations validated — no logic errors detected</div>', unsafe_allow_html=True)
